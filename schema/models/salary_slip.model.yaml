@@ -1,0 +1,103 @@
+# =============================================================================
+# Domain: Payroll
+# Entities: SalarySlip (+ SalarySlipLine)
+# Description: One employee's pay for one run. Its lines are the earnings + deductions (from the assigned
+# structure) plus the SUPPLIED Indonesia statutory deductions (BPJS Kesehatan/Ketenagakerjaan, PPh 21 —
+# computed by the deferred overlay, supplied here like billing's tax lines). `net_pay = gross_pay −
+# total_deductions`. Reads the HR employee (logical FK). Posts NO GL (the run posts the roll-up).
+# =============================================================================
+
+models:
+  - name: SalarySlip
+    collection: salary_slips
+    description: "One employee's pay for one run (gross − deductions = net)"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique slip id"
+      payroll_entry_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(PayrollEntry.id)"]
+        description: "The run this slip belongs to"
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK to organization.Company.id"
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The employee # logical FK to hr.Employee.id"
+      structure_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The salary structure applied # logical FK to SalaryStructure.id"
+      working_days:
+        type: decimal
+        attributes: ["@default(0)", "@precision(6,2)", "@non_negative"]
+        description: "Payable days in the period (from HR)"
+      unpaid_days:
+        type: decimal
+        attributes: ["@default(0)", "@precision(6,2)", "@non_negative"]
+        description: "Unpaid-leave + uncovered-absence days (from HR period_summary) — reduce gross"
+      gross_pay:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "Σ earning lines (after any unpaid-day proration)"
+      total_deductions:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "Σ deduction lines (fixed + statutory)"
+      net_pay:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "gross_pay − total_deductions (take-home)"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      - type: unique
+        fields: [payroll_entry_id, employee_id]
+      - type: index
+        fields: [company_id, employee_id]
+
+  - name: SalarySlipLine
+    collection: salary_slip_lines
+    description: "One earning or deduction on a slip, with the GL account it hits"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique line id"
+      salary_slip_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(SalarySlip.id)"]
+        description: "Parent slip"
+      name:
+        type: string
+        attributes: ["@required", "@max(140)"]
+        description: "Line name (Gaji Pokok, BPJS Kesehatan, PPh 21, …)"
+      component_type:
+        type: ComponentType
+        attributes: ["@required", "@default(earning)"]
+        description: "earning or deduction"
+      is_statutory:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "True for the supplied Indonesia statutory deductions (BPJS, PPh 21)"
+      amount:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "Line amount (IDR)"
+      gl_account_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "GL account # logical FK to accounting.Account.id (a payable for deductions)"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      - type: index
+        fields: [salary_slip_id]

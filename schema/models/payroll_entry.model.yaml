@@ -1,0 +1,88 @@
+# =============================================================================
+# Domain: Payroll
+# Entity: PayrollEntry
+# Description: A payroll RUN for a company over one period (year/month). It gathers per-employee salary
+# slips, rolls up gross/deductions/net, and on posting emits ONE balanced AccountingPost — the 8th GL
+# producer: `Dr Salary Expense (gross) · Cr Salary Payable (net) · Cr statutory payables (BPJS + PPh 21)`.
+# Idempotent per run (source_id = run id). Reads the HR employee master; posts to backbone-accounting.
+# =============================================================================
+
+models:
+  - name: PayrollEntry
+    collection: payroll_entries
+    description: "A payroll run over a period; posts one balanced salary journal to the GL"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique run id (the GL source_id)"
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Books owner # logical FK to organization.Company.id"
+      period_year:
+        type: integer
+        attributes: ["@required"]
+        description: "Pay period year"
+      period_month:
+        type: integer
+        attributes: ["@required"]
+        description: "Pay period month (1..12)"
+      posting_date:
+        type: datetime?
+        description: "GL posting date (set on post)"
+      status:
+        type: PayrollStatus
+        attributes: ["@required", "@default(draft)"]
+        description: "draft → processed → posted / cancelled"
+      salary_expense_account_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Dr account for gross earnings # logical FK to accounting.Account.id"
+      salary_payable_account_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Cr account for net take-home # logical FK to accounting.Account.id"
+      total_gross:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "Σ slip gross"
+      total_deductions:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "Σ slip deductions (fixed + statutory)"
+      total_net:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "Σ slip net (gross − deductions)"
+      journal_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Journal created on post # logical FK to accounting.Journal.id"
+      accounting_post_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The AccountingPost id echoed back on post"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      - type: unique
+        fields: [company_id, period_year, period_month]
+      - type: index
+        fields: [company_id, status]
+
+enums:
+  - name: PayrollStatus
+    description: "Payroll run lifecycle"
+    variants:
+      - name: draft
+        description: "Being assembled — slips can be added"
+        default: true
+      - name: processed
+        description: "Totals rolled up — ready to post"
+      - name: posted
+        description: "Posted to the GL (Dr Expense · Cr payables + net)"
+      - name: cancelled
+        description: "Cancelled"

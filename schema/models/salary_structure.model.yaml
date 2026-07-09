@@ -1,0 +1,84 @@
+# =============================================================================
+# Domain: Payroll
+# Entities: SalaryStructure (+ SalaryComponent)
+# Description: A reusable pay template — its components are the earnings (basic, allowances) and fixed
+# deductions that make up a salary slip. Each component names the GL account it hits (earnings → salary
+# expense; deductions → a payable). The Indonesia statutory deductions (BPJS, PPh 21) are NOT fixed
+# components — they are supplied per slip by the deferred statutory overlay (like the tax overlay).
+# Posts NO GL itself (the run posts).
+# =============================================================================
+
+models:
+  - name: SalaryStructure
+    collection: salary_structures
+    description: "A reusable pay template (earnings + fixed deductions)"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique structure id"
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # logical FK to organization.Company.id"
+      name:
+        type: string
+        attributes: ["@required", "@max(140)"]
+        description: "Structure name (e.g. 'Staff Bulanan')"
+      is_active:
+        type: boolean
+        attributes: ["@default(true)"]
+        description: "Whether new slips may use this structure"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      - type: index
+        fields: [company_id, is_active]
+
+  - name: SalaryComponent
+    collection: salary_components
+    description: "One earning or deduction line in a structure, with the GL account it hits"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique component id"
+      structure_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(SalaryStructure.id)"]
+        description: "Parent structure"
+      name:
+        type: string
+        attributes: ["@required", "@max(140)"]
+        description: "Component name (Gaji Pokok, Tunjangan Transport, Potongan Koperasi)"
+      component_type:
+        type: ComponentType
+        attributes: ["@required", "@default(earning)"]
+        description: "earning (adds to gross) or deduction (subtracts)"
+      amount:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "Fixed monthly amount (IDR)"
+      gl_account_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "GL account # logical FK to accounting.Account.id (expense for earnings, payable for deductions)"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      - type: index
+        fields: [structure_id]
+
+enums:
+  - name: ComponentType
+    description: "Whether a component adds to gross pay or is deducted"
+    variants:
+      - name: earning
+        description: "Adds to gross pay"
+        default: true
+      - name: deduction
+        description: "Subtracted from gross"
