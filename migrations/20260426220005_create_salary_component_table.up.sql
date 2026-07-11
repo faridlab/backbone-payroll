@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS payroll.salary_components (
     structure_id UUID NOT NULL,
     name TEXT NOT NULL,
     component_type component_type NOT NULL DEFAULT 'earning',
-    amount NUMERIC NOT NULL DEFAULT 0,
+    amount NUMERIC(18, 2) NOT NULL DEFAULT 0 CHECK (amount >= 0),
     gl_account_id UUID NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{"created_at":null,"updated_at":null,"deleted_at":null,"created_by":null,"updated_by":null,"deleted_by":null}'::jsonb,
     PRIMARY KEY (id)

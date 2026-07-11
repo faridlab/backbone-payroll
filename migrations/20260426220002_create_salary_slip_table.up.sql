@@ -9,11 +9,11 @@ CREATE TABLE IF NOT EXISTS payroll.salary_slips (
     company_id UUID NOT NULL,
     employee_id UUID NOT NULL,
     structure_id UUID,
-    working_days NUMERIC NOT NULL DEFAULT 0,
-    unpaid_days NUMERIC NOT NULL DEFAULT 0,
-    gross_pay NUMERIC NOT NULL DEFAULT 0,
-    total_deductions NUMERIC NOT NULL DEFAULT 0,
-    net_pay NUMERIC NOT NULL DEFAULT 0,
+    working_days NUMERIC(6, 2) NOT NULL DEFAULT 0 CHECK (working_days >= 0),
+    unpaid_days NUMERIC(6, 2) NOT NULL DEFAULT 0 CHECK (unpaid_days >= 0),
+    gross_pay NUMERIC(18, 2) NOT NULL DEFAULT 0 CHECK (gross_pay >= 0),
+    total_deductions NUMERIC(18, 2) NOT NULL DEFAULT 0 CHECK (total_deductions >= 0),
+    net_pay NUMERIC(18, 2) NOT NULL DEFAULT 0 CHECK (net_pay >= 0),
     metadata JSONB NOT NULL DEFAULT '{"created_at":null,"updated_at":null,"deleted_at":null,"created_by":null,"updated_by":null,"deleted_by":null}'::jsonb,
     PRIMARY KEY (id)
 );
