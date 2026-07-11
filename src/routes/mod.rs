@@ -12,10 +12,15 @@ use std::sync::Arc;
 // Import handlers
 use crate::presentation::http::{
     create_payroll_entry_routes,
+    create_payroll_entry_read_routes,
     create_salary_slip_routes,
+    create_salary_slip_read_routes,
     create_salary_slip_line_routes,
+    create_salary_slip_line_read_routes,
     create_salary_structure_routes,
-    create_salary_component_routes
+    create_salary_structure_read_routes,
+    create_salary_component_routes,
+    create_salary_component_read_routes
 };
 
 // Import AppState for stateful routes
@@ -44,6 +49,20 @@ pub fn create_stateless_routes(module: &crate::PayrollModule) -> Router<()> {
         .merge(create_salary_slip_line_routes(module.salary_slip_line_service.clone()))
         .merge(create_salary_structure_routes(module.salary_structure_service.clone()))
         .merge(create_salary_component_routes(module.salary_component_service.clone()))
+}
+
+/// Read-only routes for the Payroll module — every entity mounted READ-ONLY (the guarded base).
+///
+/// The generic `create_stateless_routes` exposes full mutable CRUD with no domain
+/// validation; this exposes only reads, so generic mutation can't bypass a write
+/// service's invariants. Extend it: `create_readonly_payroll_routes(m).merge(my_validated_writes)`.
+pub fn create_readonly_payroll_routes(module: &crate::PayrollModule) -> Router<()> {
+    Router::new()
+        .merge(create_payroll_entry_read_routes(module.payroll_entry_service.clone()))
+        .merge(create_salary_slip_read_routes(module.salary_slip_service.clone()))
+        .merge(create_salary_slip_line_read_routes(module.salary_slip_line_service.clone()))
+        .merge(create_salary_structure_read_routes(module.salary_structure_service.clone()))
+        .merge(create_salary_component_read_routes(module.salary_component_service.clone()))
 }
 
 /// Get all routes (stateless) for the Payroll module.
