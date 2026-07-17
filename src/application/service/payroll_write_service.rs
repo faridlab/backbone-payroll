@@ -8,6 +8,7 @@
 //! the Indonesia statutory amounts (BPJS, PPh 21) are supplied by the deferred overlay. Money is IDR,
 //! 2dp, half-away-from-zero.
 
+use backbone_orm::company_scope;
 use rust_decimal::{Decimal, RoundingStrategy};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -99,7 +100,10 @@ impl PayrollWriteService {
             return Err(PayrollError::Invalid("a structure needs at least one component".into()));
         }
         let id = Uuid::new_v4();
+        // RLS scope (ADR-0008): company is on the DTO — bind it onto our own transaction so the
+        // structure + component inserts pass the `app.company_id` WITH CHECK fence.
         let mut tx = self.pool.begin().await?;
+        company_scope::bind_company_on(&mut tx, s.company_id).await?;
         sqlx::query(
             r#"INSERT INTO payroll.salary_structures (id, company_id, name, is_active)
                VALUES ($1,$2,$3,true)"#,
@@ -130,15 +134,19 @@ impl PayrollWriteService {
             return Err(PayrollError::Invalid("period_month must be 1..12".into()));
         }
         let id = Uuid::new_v4();
-        let r = sqlx::query(
+        // RLS scope (ADR-0008): company is on the DTO — scope the insert so it passes the WITH CHECK fence.
+        let insert_q = sqlx::query(
             r#"INSERT INTO payroll.payroll_entries
                  (id, company_id, period_year, period_month, status, salary_expense_account_id,
                   salary_payable_account_id, total_gross, total_deductions, total_net)
                VALUES ($1,$2,$3,$4,'draft'::payroll_status,$5,$6,0,0,0)"#,
         )
         .bind(id).bind(e.company_id).bind(e.period_year).bind(e.period_month)
-        .bind(e.salary_expense_account_id).bind(e.salary_payable_account_id)
-        .execute(&self.pool)
+        .bind(e.salary_expense_account_id).bind(e.salary_payable_account_id);
+        let r = company_scope::with_company_scope(
+            Some(e.company_id),
+            company_scope::execute_scoped(&self.pool, insert_q),
+        )
         .await;
         match r {
             Ok(_) => Ok(id),
@@ -152,12 +160,18 @@ impl PayrollWriteService {
     /// (`gross = Σ earning · (working − unpaid)/working`); fixed + supplied statutory deductions subtract.
     /// `net = gross − deductions` and must be non-negative.
     pub async fn add_salary_slip(&self, run_id: Uuid, s: NewSalarySlip) -> Result<Uuid, PayrollError> {
-        let run = sqlx::query(
-            r#"SELECT company_id, status::text AS status FROM payroll.payroll_entries
-               WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
+        // RLS scope (ADR-0008), ID-only pattern: identified by the run id alone — no company argument to
+        // scope from up front. The lookup rides the request-dedicated connection (which carries the
+        // caller's `app.company_id`), so another company's run simply isn't found. Having read the run,
+        // we bind its company onto our own transaction below.
+        let run = company_scope::fetch_optional_row_scoped(
+            &self.pool,
+            sqlx::query(
+                r#"SELECT company_id, status::text AS status FROM payroll.payroll_entries
+                   WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
+            )
+            .bind(run_id),
         )
-        .bind(run_id)
-        .fetch_optional(&self.pool)
         .await?
         .ok_or(PayrollError::NotFound("payroll run"))?;
         if run.get::<String, _>("status") != "draft" {
@@ -179,11 +193,16 @@ impl PayrollWriteService {
         let factor = (s.working_days - unpaid) / s.working_days; // proration for unpaid days
 
         // Load the structure components.
-        let comps = sqlx::query(
-            "SELECT name, component_type::text AS ct, amount, gl_account_id FROM payroll.salary_components WHERE structure_id=$1")
-            .bind(s.structure_id)
-            .fetch_all(&self.pool)
-            .await?;
+        let comps = company_scope::with_company_scope(
+            Some(company_id),
+            company_scope::fetch_all_rows_scoped(
+                &self.pool,
+                sqlx::query(
+                    "SELECT name, component_type::text AS ct, amount, gl_account_id FROM payroll.salary_components WHERE structure_id=$1")
+                    .bind(s.structure_id),
+            ),
+        )
+        .await?;
         if comps.is_empty() {
             return Err(PayrollError::Invalid("salary structure has no components".into()));
         }
@@ -219,6 +238,8 @@ impl PayrollWriteService {
 
         let slip_id = Uuid::new_v4();
         let mut tx = self.pool.begin().await?;
+        // The run's own company, read above — bind it so the slip + line inserts pass the WITH CHECK fence.
+        company_scope::bind_company_on(&mut tx, company_id).await?;
         let ins = sqlx::query(
             r#"INSERT INTO payroll.salary_slips
                  (id, payroll_entry_id, company_id, employee_id, structure_id, working_days, unpaid_days,
@@ -250,25 +271,32 @@ impl PayrollWriteService {
 
     /// Roll the run's slips up into its totals and move `draft → processed` (ready to post).
     pub async fn process_payroll_entry(&self, run_id: Uuid) -> Result<(), PayrollError> {
-        let totals = sqlx::query(
-            r#"SELECT COALESCE(SUM(gross_pay),0) AS g, COALESCE(SUM(total_deductions),0) AS d,
-                      COALESCE(SUM(net_pay),0) AS n, count(*) AS c
-               FROM payroll.salary_slips WHERE payroll_entry_id=$1 AND (metadata->>'deleted_at') IS NULL"#,
+        // RLS scope (ADR-0008), ID-only pattern: the run id alone identifies the work, so the reads and
+        // the transition ride the request-dedicated connection's `app.company_id`. An event-driven caller
+        // must wrap this in `with_company_scope(Some(event.company_id))` or the reads fail closed.
+        let totals = company_scope::fetch_one_row_scoped(
+            &self.pool,
+            sqlx::query(
+                r#"SELECT COALESCE(SUM(gross_pay),0) AS g, COALESCE(SUM(total_deductions),0) AS d,
+                          COALESCE(SUM(net_pay),0) AS n, count(*) AS c
+                   FROM payroll.salary_slips WHERE payroll_entry_id=$1 AND (metadata->>'deleted_at') IS NULL"#,
+            )
+            .bind(run_id),
         )
-        .bind(run_id)
-        .fetch_one(&self.pool)
         .await?;
         if totals.get::<i64, _>("c") == 0 {
             return Err(PayrollError::Invalid("a run needs at least one salary slip".into()));
         }
         let (g, d, n): (Decimal, Decimal, Decimal) = (totals.get("g"), totals.get("d"), totals.get("n"));
-        let moved = sqlx::query(
-            r#"UPDATE payroll.payroll_entries
-               SET status='processed'::payroll_status, total_gross=$2, total_deductions=$3, total_net=$4
-               WHERE id=$1 AND status='draft'::payroll_status"#,
+        let moved = company_scope::execute_scoped(
+            &self.pool,
+            sqlx::query(
+                r#"UPDATE payroll.payroll_entries
+                   SET status='processed'::payroll_status, total_gross=$2, total_deductions=$3, total_net=$4
+                   WHERE id=$1 AND status='draft'::payroll_status"#,
+            )
+            .bind(run_id).bind(g).bind(d).bind(n),
         )
-        .bind(run_id).bind(g).bind(d).bind(n)
-        .execute(&self.pool)
         .await?;
         if moved.rows_affected() != 1 {
             return Err(PayrollError::InvalidState("run is not draft"));
@@ -287,13 +315,18 @@ impl PayrollWriteService {
         sink: &dyn GlPostSink,
         events: &dyn PayrollEventSink,
     ) -> Result<PostOutcome, PayrollError> {
-        let run = sqlx::query(
-            r#"SELECT company_id, status::text AS status, salary_expense_account_id, salary_payable_account_id,
-                      total_gross, total_deductions, total_net, journal_id, accounting_post_id
-               FROM payroll.payroll_entries WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
+        // RLS scope (ADR-0008), ID-only pattern: identified by the run id alone. Under HTTP the
+        // request-dedicated connection carries the scope. Driven by an EVENT, the caller must wrap this
+        // in `with_company_scope(Some(event.company_id))` — otherwise these reads fail closed.
+        let run = company_scope::fetch_optional_row_scoped(
+            &self.pool,
+            sqlx::query(
+                r#"SELECT company_id, status::text AS status, salary_expense_account_id, salary_payable_account_id,
+                          total_gross, total_deductions, total_net, journal_id, accounting_post_id
+                   FROM payroll.payroll_entries WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
+            )
+            .bind(run_id),
         )
-        .bind(run_id)
-        .fetch_optional(&self.pool)
         .await?
         .ok_or(PayrollError::NotFound("payroll run"))?;
         let status: String = run.get("status");
@@ -316,15 +349,20 @@ impl PayrollWriteService {
 
         // Deductions grouped by their payable account across every slip, carrying whether the account is
         // a statutory payable (routes the settlement consumer's remittance to the right authority).
-        let ded_rows = sqlx::query(
-            r#"SELECT l.gl_account_id, SUM(l.amount) AS amt, bool_or(l.is_statutory) AS statutory
-               FROM payroll.salary_slip_lines l JOIN payroll.salary_slips s ON s.id = l.salary_slip_id
-               WHERE s.payroll_entry_id=$1 AND l.component_type='deduction'::component_type
-                 AND (s.metadata->>'deleted_at') IS NULL
-               GROUP BY l.gl_account_id"#,
+        let ded_rows = company_scope::with_company_scope(
+            Some(company_id),
+            company_scope::fetch_all_rows_scoped(
+                &self.pool,
+                sqlx::query(
+                    r#"SELECT l.gl_account_id, SUM(l.amount) AS amt, bool_or(l.is_statutory) AS statutory
+                       FROM payroll.salary_slip_lines l JOIN payroll.salary_slips s ON s.id = l.salary_slip_id
+                       WHERE s.payroll_entry_id=$1 AND l.component_type='deduction'::component_type
+                         AND (s.metadata->>'deleted_at') IS NULL
+                       GROUP BY l.gl_account_id"#,
+                )
+                .bind(run_id),
+            ),
         )
-        .bind(run_id)
-        .fetch_all(&self.pool)
         .await?;
 
         // Build the balanced posting: Dr Expense (gross) · Cr Payable (net) · Cr each deduction account.
@@ -354,19 +392,31 @@ impl PayrollWriteService {
 
         let ack = sink.post(&env).await.map_err(|r| PayrollError::GlRejected(r.code))?;
 
-        let moved = sqlx::query(
-            r#"UPDATE payroll.payroll_entries
-               SET status='posted'::payroll_status, posting_date=$2, journal_id=$3, accounting_post_id=$4
-               WHERE id=$1 AND status='processed'::payroll_status"#,
+        let moved = company_scope::with_company_scope(
+            Some(company_id),
+            company_scope::execute_scoped(
+                &self.pool,
+                sqlx::query(
+                    r#"UPDATE payroll.payroll_entries
+                       SET status='posted'::payroll_status, posting_date=$2, journal_id=$3, accounting_post_id=$4
+                       WHERE id=$1 AND status='processed'::payroll_status"#,
+                )
+                .bind(run_id).bind(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(posting_date.and_hms_opt(0,0,0).unwrap(), chrono::Utc))
+                .bind(ack.journal_id).bind(ack.post_id),
+            ),
         )
-        .bind(run_id).bind(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(posting_date.and_hms_opt(0,0,0).unwrap(), chrono::Utc))
-        .bind(ack.journal_id).bind(ack.post_id)
-        .execute(&self.pool)
         .await?;
         if moved.rows_affected() != 1 {
             // Raced — the winner posted; return its journal.
-            let j: Uuid = sqlx::query_scalar("SELECT journal_id FROM payroll.payroll_entries WHERE id=$1")
-                .bind(run_id).fetch_one(&self.pool).await?;
+            let j: Uuid = company_scope::with_company_scope(
+                Some(company_id),
+                company_scope::fetch_one_scalar_scoped(
+                    &self.pool,
+                    sqlx::query_scalar("SELECT journal_id FROM payroll.payroll_entries WHERE id=$1")
+                        .bind(run_id),
+                ),
+            )
+            .await?;
             return Ok(PostOutcome { payroll_entry_id: run_id, journal_id: j, post_id: ack.post_id, total_net, already: true });
         }
         events.publish(&PayrollEvent::PayrollPosted(PayrollPosted {
