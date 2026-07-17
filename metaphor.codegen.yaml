@@ -14,6 +14,15 @@ user_owned:
   - "src/application/service/payroll_events.rs"
   - "src/application/service/payroll_gl.rs"
   - "src/application/service/payroll_write_service.rs"
+  # Own the hand-written payroll SQL (the structure/run/slip writes, the run roll-up, the deduction
+  # grouping the salary journal is built from, and the at-most-once GL post gate) that the write service
+  # orchestrates. Declared here — not renamed with a `_custom` suffix — so the generator skips them
+  # wholesale; this declaration is what makes editing them legitimate.
+  - "src/infrastructure/persistence/payroll_entry_repository.rs"
+  - "src/infrastructure/persistence/salary_component_repository.rs"
+  - "src/infrastructure/persistence/salary_slip_line_repository.rs"
+  - "src/infrastructure/persistence/salary_slip_repository.rs"
+  - "src/infrastructure/persistence/salary_structure_repository.rs"
   - "tests/integrity_probes.rs"
   - "tests/payroll_gl_seam.rs"
   - "tests/payroll_golden_cases.rs"
