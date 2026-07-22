@@ -2259,6 +2259,7 @@ components:
       required:
         - id
         - salary_slip_id
+        - company_id
         - name
         - component_type
         - is_statutory
@@ -2270,6 +2271,9 @@ components:
           type: string
           format: uuid
         salary_slip_id:
+          type: string
+          format: uuid
+        company_id:
           type: string
           format: uuid
         name:
@@ -2304,6 +2308,7 @@ components:
       type: object
       required:
         - salary_slip_id
+        - company_id
         - name
         - component_type
         - is_statutory
@@ -2312,6 +2317,9 @@ components:
         - metadata
       properties:
         salary_slip_id:
+          type: string
+          format: uuid
+        company_id:
           type: string
           format: uuid
         name:
@@ -2333,6 +2341,7 @@ components:
       type: object
       required:
         - salary_slip_id
+        - company_id
         - name
         - component_type
         - is_statutory
@@ -2341,6 +2350,9 @@ components:
         - metadata
       properties:
         salary_slip_id:
+          type: string
+          format: uuid
+        company_id:
           type: string
           format: uuid
         name:
@@ -2362,6 +2374,9 @@ components:
       type: object
       properties:
         salary_slip_id:
+          type: string
+          format: uuid
+        company_id:
           type: string
           format: uuid
         name:
@@ -2492,6 +2507,7 @@ components:
       required:
         - id
         - structure_id
+        - company_id
         - name
         - component_type
         - amount
@@ -2502,6 +2518,9 @@ components:
           type: string
           format: uuid
         structure_id:
+          type: string
+          format: uuid
+        company_id:
           type: string
           format: uuid
         name:
@@ -2534,6 +2553,7 @@ components:
       type: object
       required:
         - structure_id
+        - company_id
         - name
         - component_type
         - amount
@@ -2541,6 +2561,9 @@ components:
         - metadata
       properties:
         structure_id:
+          type: string
+          format: uuid
+        company_id:
           type: string
           format: uuid
         name:
@@ -2560,6 +2583,7 @@ components:
       type: object
       required:
         - structure_id
+        - company_id
         - name
         - component_type
         - amount
@@ -2567,6 +2591,9 @@ components:
         - metadata
       properties:
         structure_id:
+          type: string
+          format: uuid
+        company_id:
           type: string
           format: uuid
         name:
@@ -2586,6 +2613,9 @@ components:
       type: object
       properties:
         structure_id:
+          type: string
+          format: uuid
+        company_id:
           type: string
           format: uuid
         name:

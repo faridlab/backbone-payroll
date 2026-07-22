@@ -178,6 +178,7 @@ impl From<SalarySlipLineId> for Uuid {
 pub struct SalarySlipLineDto {
     pub id: SalarySlipLineId,
     pub salary_slip_id: Uuid,
+    pub company_id: Uuid,
     pub name: String,
     pub component_type: ComponentType,
     pub is_statutory: bool,
@@ -295,6 +296,7 @@ impl From<SalaryComponentId> for Uuid {
 pub struct SalaryComponentDto {
     pub id: SalaryComponentId,
     pub structure_id: Uuid,
+    pub company_id: Uuid,
     pub name: String,
     pub component_type: ComponentType,
     pub amount: Decimal,

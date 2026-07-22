@@ -52,6 +52,7 @@ impl std::ops::Deref for SalaryComponentId {
 pub struct SalaryComponent {
     pub id: Uuid,
     pub structure_id: Uuid,
+    pub company_id: Uuid,
     pub name: String,
     pub component_type: ComponentType,
     pub amount: Decimal,
@@ -68,10 +69,11 @@ impl SalaryComponent {
     }
 
     /// Create a new SalaryComponent with required fields
-    pub fn new(structure_id: Uuid, name: String, component_type: ComponentType, amount: Decimal, gl_account_id: Uuid) -> Self {
+    pub fn new(structure_id: Uuid, company_id: Uuid, name: String, component_type: ComponentType, amount: Decimal, gl_account_id: Uuid) -> Self {
         Self {
             id: Uuid::new_v4(),
             structure_id,
+            company_id,
             name,
             component_type,
             amount,
@@ -142,6 +144,9 @@ impl SalaryComponent {
                 "structure_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.structure_id = v; }
                 }
+                "company_id" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
+                }
                 "name" => {
                     if let Ok(v) = serde_json::from_value(value) { self.name = v; }
                 }
@@ -209,12 +214,16 @@ impl backbone_orm::EntityRepoMeta for SalaryComponent {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
         m.insert("structure_id".to_string(), "uuid".to_string());
+        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("gl_account_id".to_string(), "uuid".to_string());
         m.insert("component_type".to_string(), "component_type".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
         &["name"]
+    }
+    fn company_field() -> Option<&'static str> {
+        Some("company_id")
     }
 }
 
@@ -225,6 +234,7 @@ impl backbone_orm::EntityRepoMeta for SalaryComponent {
 #[derive(Debug, Clone, Default)]
 pub struct SalaryComponentBuilder {
     structure_id: Option<Uuid>,
+    company_id: Option<Uuid>,
     name: Option<String>,
     component_type: Option<ComponentType>,
     amount: Option<Decimal>,
@@ -235,6 +245,12 @@ impl SalaryComponentBuilder {
     /// Set the structure_id field (required)
     pub fn structure_id(mut self, value: Uuid) -> Self {
         self.structure_id = Some(value);
+        self
+    }
+
+    /// Set the company_id field (required)
+    pub fn company_id(mut self, value: Uuid) -> Self {
+        self.company_id = Some(value);
         self
     }
 
@@ -267,12 +283,14 @@ impl SalaryComponentBuilder {
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<SalaryComponent, String> {
         let structure_id = self.structure_id.ok_or_else(|| "structure_id is required".to_string())?;
+        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let name = self.name.ok_or_else(|| "name is required".to_string())?;
         let gl_account_id = self.gl_account_id.ok_or_else(|| "gl_account_id is required".to_string())?;
 
         Ok(SalaryComponent {
             id: Uuid::new_v4(),
             structure_id,
+            company_id,
             name,
             component_type: self.component_type.unwrap_or(ComponentType::default()),
             amount: self.amount.unwrap_or(Decimal::from(0)),

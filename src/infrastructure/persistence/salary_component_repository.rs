@@ -47,6 +47,7 @@ impl SalaryComponentRepository {
 pub struct NewComponentRow<'a> {
     pub id: Uuid,
     pub structure_id: Uuid,
+    pub company_id: Uuid,
     pub name: &'a str,
     pub component_type: &'a str,
     pub amount: Decimal,
@@ -68,7 +69,9 @@ impl SalaryComponentRepository {
     /// Insert one earning/deduction component of a structure.
     ///
     /// Takes the CALLER'S connection so the structure and all its components commit as ONE unit. The
-    /// caller has already bound the company on it — don't re-bind here.
+    /// caller has already bound the company on it — don't re-bind here. The component carries its own
+    /// denormalized `company_id` (ADR-0010 child-table fence) so the WITH CHECK passes without a parent
+    /// join.
     pub async fn insert_component(
         &self,
         conn: &mut sqlx::PgConnection,
@@ -76,10 +79,11 @@ impl SalaryComponentRepository {
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO payroll.salary_components
-                 (id, structure_id, name, component_type, amount, gl_account_id)
-               VALUES ($1,$2,$3,$4::component_type,$5,$6)"#,
+                 (id, structure_id, company_id, name, component_type, amount, gl_account_id)
+               VALUES ($1,$2,$3,$4,$5::component_type,$6,$7)"#,
         )
-        .bind(c.id).bind(c.structure_id).bind(c.name).bind(c.component_type).bind(c.amount).bind(c.gl_account_id)
+        .bind(c.id).bind(c.structure_id).bind(c.company_id).bind(c.name).bind(c.component_type)
+        .bind(c.amount).bind(c.gl_account_id)
         .execute(conn)
         .await?;
         Ok(())
@@ -88,8 +92,8 @@ impl SalaryComponentRepository {
     /// List a structure's components — the earnings and fixed deductions a slip is assembled from.
     ///
     /// A read outside any transaction: takes the pool and runs `fetch_all_rows_scoped` so the RLS fence
-    /// (ADR-0008) applies. The caller wraps this in `with_company_scope(Some(company_id))` using the
-    /// company it read off the run.
+    /// (ADR-0010 on the component) applies. The caller wraps this in
+    /// `with_company_scope(Some(company_id))` using the company it read off the run.
     pub async fn list_by_structure(
         &self,
         pool: &PgPool,

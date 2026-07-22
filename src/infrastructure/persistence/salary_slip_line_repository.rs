@@ -48,6 +48,7 @@ impl SalarySlipLineRepository {
 pub struct NewSlipLineRow<'a> {
     pub id: Uuid,
     pub salary_slip_id: Uuid,
+    pub company_id: Uuid,
     pub name: &'a str,
     pub component_type: &'a str,
     pub is_statutory: bool,
@@ -71,7 +72,8 @@ impl SalarySlipLineRepository {
     /// Insert one line of a slip.
     ///
     /// Takes the CALLER'S connection so every line and its slip commit as ONE unit. The caller has
-    /// already bound the company on it — don't re-bind here.
+    /// already bound the company on it — don't re-bind here. The line carries its own denormalized
+    /// `company_id` (ADR-0010 child-table fence) so the WITH CHECK passes without a parent join.
     pub async fn insert_line(
         &self,
         conn: &mut sqlx::PgConnection,
@@ -79,11 +81,11 @@ impl SalarySlipLineRepository {
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO payroll.salary_slip_lines
-                 (id, salary_slip_id, name, component_type, is_statutory, amount, gl_account_id)
-               VALUES ($1,$2,$3,$4::component_type,$5,$6,$7)"#,
+                 (id, salary_slip_id, company_id, name, component_type, is_statutory, amount, gl_account_id)
+               VALUES ($1,$2,$3,$4,$5::component_type,$6,$7,$8)"#,
         )
-        .bind(l.id).bind(l.salary_slip_id).bind(l.name).bind(l.component_type).bind(l.is_statutory)
-        .bind(l.amount).bind(l.gl_account_id)
+        .bind(l.id).bind(l.salary_slip_id).bind(l.company_id).bind(l.name).bind(l.component_type)
+        .bind(l.is_statutory).bind(l.amount).bind(l.gl_account_id)
         .execute(conn)
         .await?;
         Ok(())
@@ -94,8 +96,8 @@ impl SalarySlipLineRepository {
     /// (settlement's input).
     ///
     /// A read outside any transaction: takes the pool and runs `fetch_all_rows_scoped` so the RLS fence
-    /// (ADR-0008) applies. The caller wraps this in `with_company_scope(Some(company_id))` using the
-    /// company it read off the run.
+    /// (ADR-0008 on the slip, ADR-0010 on the line) applies. The caller wraps this in
+    /// `with_company_scope(Some(company_id))` using the company it read off the run.
     pub async fn group_deductions_by_account(
         &self,
         pool: &PgPool,

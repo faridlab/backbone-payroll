@@ -25,6 +25,7 @@ impl TestDataGenerator for SalarySlipLineTestData {
         json!({
             "id": Uuid::new_v4().to_string(),
             "salary_slip_id": Uuid::new_v4().to_string(),
+            "company_id": Uuid::new_v4().to_string(),
             "name": format!("Test {}", Uuid::new_v4().to_string().split('-').next().unwrap()),
             "component_type": "earning",
             "is_statutory": false,
@@ -39,6 +40,7 @@ impl TestDataGenerator for SalarySlipLineTestData {
         json!({
             "id": id,
             "salary_slip_id": Uuid::new_v4().to_string(),
+            "company_id": Uuid::new_v4().to_string(),
             "name": format!("Test {}", Uuid::new_v4().to_string().split('-').next().unwrap()),
             "component_type": "earning",
             "is_statutory": false,

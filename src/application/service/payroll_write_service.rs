@@ -132,6 +132,7 @@ impl PayrollWriteService {
             self.components.insert_component(&mut tx, &NewComponentRow {
                 id: Uuid::new_v4(),
                 structure_id: id,
+                company_id: s.company_id,
                 name: &c.name,
                 component_type: &c.component_type,
                 amount: money(c.amount),
@@ -261,6 +262,7 @@ impl PayrollWriteService {
             self.slip_lines.insert_line(&mut tx, &NewSlipLineRow {
                 id: Uuid::new_v4(),
                 salary_slip_id: slip_id,
+                company_id,
                 name: &l.name,
                 component_type: &l.ct,
                 is_statutory: l.is_statutory,

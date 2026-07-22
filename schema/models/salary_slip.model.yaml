@@ -74,6 +74,10 @@ models:
         type: uuid
         attributes: ["@required", "@foreign_key(SalarySlip.id)"]
         description: "Parent slip"
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "Org owner # denormalized from SalarySlip.company_id for the ADR-0010 child-table RLS fence # logical FK to organization.Company.id"
       name:
         type: string
         attributes: ["@required", "@max(140)"]
@@ -101,3 +105,5 @@ models:
     indexes:
       - type: index
         fields: [salary_slip_id]
+      - type: index
+        fields: [company_id]

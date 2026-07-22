@@ -25,6 +25,7 @@ impl TestDataGenerator for SalaryComponentTestData {
         json!({
             "id": Uuid::new_v4().to_string(),
             "structure_id": Uuid::new_v4().to_string(),
+            "company_id": Uuid::new_v4().to_string(),
             "name": format!("Test {}", Uuid::new_v4().to_string().split('-').next().unwrap()),
             "component_type": "earning",
             "amount": 0,
@@ -38,6 +39,7 @@ impl TestDataGenerator for SalaryComponentTestData {
         json!({
             "id": id,
             "structure_id": Uuid::new_v4().to_string(),
+            "company_id": Uuid::new_v4().to_string(),
             "name": format!("Test {}", Uuid::new_v4().to_string().split('-').next().unwrap()),
             "component_type": "earning",
             "amount": 0,
