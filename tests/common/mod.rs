@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use backbone_accounting::application::service::posting_service::{
     PostingLine, PostingRequest, PostingService,
 };
+use backbone_accounting::infrastructure::persistence::SqlxPostingRepository;
 use backbone_payroll::application::service::payroll_events::{PayrollEvent, PayrollEventSink};
 use backbone_payroll::application::service::payroll_gl::{
     AccountingPostEnvelope, GlPostAck, GlPostRejected, GlPostSink,
@@ -86,7 +87,7 @@ pub struct GlAdapter {
 }
 impl GlAdapter {
     pub fn new(pool: PgPool) -> Self {
-        Self { svc: PostingService::new(pool) }
+        Self { svc: PostingService::new(Arc::new(SqlxPostingRepository::new(pool))) }
     }
 }
 #[async_trait::async_trait]
