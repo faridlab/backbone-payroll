@@ -38,7 +38,7 @@ async fn pip1_net_cannot_go_negative() {
     let r = svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("0"),
-        statutory: vec![StatutoryLine { name: "Loan".into(), amount: dec("6000000"), gl_account_id: a.bpjs_payable }],
+        statutory: vec![StatutoryLine { name: "Loan".into(), component_type: "deduction".into(), amount: dec("6000000"), gl_account_id: a.bpjs_payable }],
     }).await;
     assert!(matches!(r, Err(PayrollError::Invalid(_))), "deductions > gross must be rejected");
 }

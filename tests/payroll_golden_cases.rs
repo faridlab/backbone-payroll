@@ -31,8 +31,8 @@ async fn standard_structure(svc: &PayrollWriteService, company: Uuid, expense: U
 
 fn statutory(a: &PayrollAccounts) -> Vec<StatutoryLine> {
     vec![
-        StatutoryLine { name: "BPJS".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable },
-        StatutoryLine { name: "PPh 21".into(), amount: dec("500000"), gl_account_id: a.pph21_payable },
+        StatutoryLine { name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable },
+        StatutoryLine { name: "PPh 21".into(), component_type: "deduction".into(), amount: dec("500000"), gl_account_id: a.pph21_payable },
     ]
 }
 
