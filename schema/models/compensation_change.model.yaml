@@ -1,0 +1,87 @@
+# =============================================================================
+# Domain: payroll
+# Entity: CompensationChange
+# Description: Append-only log of compensation changes over a career — the
+#              payroll-side receiver for the lifecycle compound events (ADR-005).
+#              A `promotion.effective` appends change_type='promotion'
+#              (new_amount=proposed_salary); an `offboarding.closed` appends
+#              change_type='adjustment' (a placeholder pesangon/settlement
+#              amount; the full pesangon calc integration is TODO). Salary
+#              structures hold the *current* comp; this is the history.
+#
+#              `reference_id` is the non-null idempotency link back to the
+#              source workflow (lifecycle.Promotion.id /
+#              lifecycle.Offboarding.id) for every row written by an event.
+# =============================================================================
+
+models:
+  - name: CompensationChange
+    collection: compensation_changes
+    description: "Append-only log of compensation changes; payroll-side receiver for lifecycle compound events."
+
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+
+      company_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "# logical FK organization.Company.id"
+
+      employee_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The employee whose comp changed # logical FK employee.Employee.id"
+
+      change_type:
+        type: CompensationChangeType
+        attributes: ["@required"]
+        description: "Kind of compensation change"
+
+      new_amount:
+        type: decimal?
+        attributes: ["@precision(18,2)", "@non_negative"]
+        description: "The new compensation amount (nullable for non-monetary changes)"
+
+      effective_date:
+        type: date?
+        description: "When the change takes effect"
+
+      reference_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Idempotency link to the source workflow (e.g. lifecycle.Promotion.id)"
+
+      note:
+        type: string?
+        description: "Free-form rationale"
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [company_id]
+      - type: index
+        fields: [employee_id]
+      - type: index
+        fields: [reference_id]
+
+enums:
+  - name: CompensationChangeType
+    description: "Kind of compensation change"
+    variants:
+      - name: hire
+        default: true
+        description: "Initial compensation on hire"
+      - name: promotion
+        description: "Compensation change from a promotion/transfer/demotion"
+      - name: transfer
+        description: "Lateral move with a comp component"
+      - name: adjustment
+        description: "General adjustment (incl. offboarding settlement placeholder)"
+      - name: offboarding
+        description: "Final settlement / pesangon on offboarding"

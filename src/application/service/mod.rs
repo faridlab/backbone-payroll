@@ -17,6 +17,16 @@ pub mod salary_component_service;
 pub mod payroll_gl;
 pub mod payroll_events;
 pub mod payroll_write_service;
+pub mod statutory_calcs;
+// ADR-005 consumers: the two payroll-side receivers for the lifecycle compound events. Each appends
+// a compensation_changes row idempotently (inbox dedup on the envelope id). Registered on the
+// integration bus in backbone-hr-app's main.rs.
+pub mod promotion_salary_handler;
+pub mod offboarding_settlement_handler;
+// ADR-005 consumer: the payroll-side receiver for `onboarding.completed`. Seeds the initial
+// compensation_changes row from the joiner's starting salary, idempotently (inbox dedup on the
+// envelope id). Registered on the integration bus in backbone-hr-app's main.rs.
+pub mod onboarding_enrolled_handler;
 // END CUSTOM
 
 pub use payroll_entry_service::PayrollEntryService;
@@ -35,4 +45,12 @@ pub use payroll_write_service::{
     NewComponent, NewPayrollEntry, NewSalarySlip, NewStructure, PayrollError, PayrollWriteService,
     PostOutcome, StatutoryLine,
 };
+pub use statutory_calcs::{
+    bpjs_kesehatan, bpjs_ketenagakerjaan, compute_statutory, pph21, thr, BpjsConfig,
+    BpjsKesehatanConfig, BpjsTkBreakdown, BpjsTkConfig, Pph21Bracket, Pph21Config, PtkpTier,
+    StatutoryComponent, StatutoryConfig, StatutoryError,
+};
+pub use promotion_salary_handler::PromotionSalaryHandler;
+pub use offboarding_settlement_handler::OffboardingSettlementHandler;
+pub use onboarding_enrolled_handler::{OnboardingEnrolledHandler, OnboardingEnrollInputs, PoolOnboardingEnrollInputs};
 // END CUSTOM

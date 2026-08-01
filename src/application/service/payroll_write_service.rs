@@ -62,12 +62,20 @@ pub struct NewPayrollEntry {
     pub salary_payable_account_id: Uuid,
 }
 
-/// A supplied Indonesia statutory deduction (BPJS Kesehatan/Ketenagakerjaan, PPh 21) — computed by the
-/// deferred overlay, supplied here like billing's tax lines.
+/// A supplied Indonesia statutory component for a slip — PPh 21 / BPJS Kesehatan / BPJS
+/// Ketenagakerjaan **deductions**, or a THR **earning**. Computed by the deferred statutory overlay
+/// and supplied here like billing's tax lines.
+///
+/// `component_type` mirrors the structure-component vocabulary (`"earning"` | `"deduction"`): an
+/// earning raises gross (un-prorated — THR carries its own tenure pro-rating), a deduction subtracts.
+/// The slip-line marks either as `is_statutory: true` so the GL grouping can tell statutory payables
+/// apart from structure deductions; the deduction grouping filters `component_type='deduction'`, so a
+/// THR earning is never mis-routed to a payable account.
 pub struct StatutoryLine {
     pub name: String,
+    pub component_type: String, // "earning" | "deduction"
     pub amount: Decimal,
-    pub gl_account_id: Uuid, // the payable account (BPJS Payable, PPh 21 Payable)
+    pub gl_account_id: Uuid, // payable (deduction) or expense (earning) account
 }
 pub struct NewSalarySlip {
     pub employee_id: Uuid,
@@ -229,8 +237,22 @@ impl PayrollWriteService {
                 return Err(PayrollError::Invalid("statutory amount must be non-negative".into()));
             }
             let amt = money(st.amount);
-            deductions += amt;
-            lines.push(Line { name: st.name.clone(), ct: "deduction".into(), is_statutory: true, amount: amt, account: st.gl_account_id });
+            // Route by component_type: a THR earning raises gross (un-prorated — THR already carries
+            // its own tenure pro-rating); a deduction subtracts. The slip-line keeps the caller's
+            // component_type so the GL deduction grouping (`component_type='deduction'`) excludes THR.
+            let is_earning = st.component_type == "earning";
+            if is_earning {
+                gross += amt;
+            } else {
+                deductions += amt;
+            }
+            lines.push(Line {
+                name: st.name.clone(),
+                ct: st.component_type.clone(),
+                is_statutory: true,
+                amount: amt,
+                account: st.gl_account_id,
+            });
         }
         let net = gross - deductions;
         if net < Decimal::ZERO {

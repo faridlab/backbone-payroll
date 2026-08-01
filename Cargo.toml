@@ -1,6 +1,6 @@
 [package]
 name = "backbone-payroll"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "Minimal Backbone Framework module skeleton"
 
@@ -17,10 +17,16 @@ path = "src/lib.rs"
 # or `rev = "<commit-sha>"`. Cargo dedupes the git fetch — the repo is only
 # cloned once even though four crates reference it.
 # -----------------------------------------------------------------------------
-backbone-core = { git = "https://github.com/faridlab/backbone-framework", branch = "main", features = ["postgres"] }
-backbone-orm = { git = "https://github.com/faridlab/backbone-framework", branch = "main" }
-backbone-auth = { git = "https://github.com/faridlab/backbone-framework", branch = "main" }
-backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", branch = "main" }
+backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0", features = ["postgres"] }
+backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
+backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
+backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
+# Transactional-outbox consumer (ADR-005): the `promotion.salary` + `offboarding.settlement` handlers
+# dedup via `inbox::once` in the same tx as the compensation_changes insert. Pinned to the same tags
+# the rest of the HR constellation (employee/recruitment/lifecycle) uses so the
+# `IntegrationEventHandler` trait unifies across modules; the HR composer's [patch] block unifies
+# backbone-outbox onto local HEAD for dev.
+backbone-outbox = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.4" }
 
 # Core async runtime and serialization
 tokio = { version = "1.0", features = ["full"] }
@@ -85,7 +91,12 @@ jsonwebtoken = "9.3"
 rand = "0.8"
 
 # TEST-ONLY edges: the salary run posts ONE balanced journal into the REAL backbone-accounting ledger
-# via an in-test ACL adapter (GlPostSink), and reads employee unpaid days from the REAL backbone-hr
-# period_summary. Dev-dependencies ONLY — the shipped library has ZERO normal Cargo edge to either.
+# via an in-test ACL adapter (GlPostSink), and derives `unpaid_days` from the THREE decomposed workforce
+# read-ports — backbone-attendance (present_days), backbone-timeoff (paid_leave_days), backbone-calendar
+# (working_days) — writing setup through backbone-employee + backbone-timeoff. Dev-dependencies ONLY —
+# the shipped library has ZERO normal Cargo edge to any of them.
 backbone-accounting = { path = "../backbone-accounting" }
-backbone-hr = { path = "../backbone-hr" }
+backbone-employee = { path = "../backbone-employee" }
+backbone-attendance = { path = "../backbone-attendance" }
+backbone-timeoff = { path = "../backbone-timeoff" }
+backbone-calendar = { path = "../backbone-calendar" }
