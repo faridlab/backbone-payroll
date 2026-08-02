@@ -9,6 +9,7 @@ use axum::Router;
 use std::sync::Arc;
 
 use super::{
+    compensation_change_handler::create_compensation_change_read_routes,
     payroll_entry_handler::create_payroll_entry_routes,
     salary_slip_handler::create_salary_slip_routes,
     salary_slip_line_handler::create_salary_slip_line_routes,
@@ -17,6 +18,7 @@ use super::{
 };
 
 use crate::application::service::{
+    CompensationChangeService,
     PayrollEntryService,
     SalarySlipService,
     SalarySlipLineService,
@@ -26,6 +28,7 @@ use crate::application::service::{
 
 /// Services collection for all CRUD endpoints
 pub struct HttpServices {
+    pub compensation_change: Arc<CompensationChangeService>,
     pub payroll_entry: Arc<PayrollEntryService>,
     pub salary_slip: Arc<SalarySlipService>,
     pub salary_slip_line: Arc<SalarySlipLineService>,
@@ -50,6 +53,8 @@ pub struct HttpServices {
 /// 12. GET /api/v1/{collection}/:id/deleted - Get deleted by ID
 pub fn configure_routes(services: HttpServices) -> Router {
     Router::new()
+        // CompensationChange routes (READ-ONLY — append-only ledger; writes arrive via the lifecycle event handlers only)
+        .merge(create_compensation_change_read_routes(services.compensation_change))
         // PayrollEntry routes (12 Backbone endpoints)
         .merge(create_payroll_entry_routes(services.payroll_entry))
         // SalarySlip routes (12 Backbone endpoints)
@@ -65,6 +70,10 @@ pub fn configure_routes(services: HttpServices) -> Router {
 /// Create an individual entity's routes (for modular configuration)
 pub mod individual {
     use super::*;
+
+    pub fn compensation_change_routes(service: Arc<CompensationChangeService>) -> Router {
+        create_compensation_change_routes(service)
+    }
 
     pub fn payroll_entry_routes(service: Arc<PayrollEntryService>) -> Router {
         create_payroll_entry_routes(service)

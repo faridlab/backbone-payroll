@@ -23,6 +23,7 @@ pub mod infrastructure;
 pub mod application;
 pub mod presentation;
 pub mod seeders;
+pub mod exports;
 
 // Re-exports for convenience - Domain entities
 pub use domain::entity::*;
@@ -31,6 +32,7 @@ pub use domain::entity::*;
 pub use infrastructure::persistence::*;
 
 // Re-exports - Application services
+pub use application::service::CompensationChangeService;
 pub use application::service::PayrollEntryService;
 pub use application::service::SalarySlipService;
 pub use application::service::SalarySlipLineService;
@@ -54,11 +56,14 @@ use sqlx::PgPool;
 /// let router = payroll.all_crud_routes();
 /// ```
 pub struct PayrollModule {
-    pub payroll_entry_service: Arc<PayrollEntryService>,
-    pub salary_slip_service: Arc<SalarySlipService>,
-    pub salary_slip_line_service: Arc<SalarySlipLineService>,
-    pub salary_structure_service: Arc<SalaryStructureService>,
-    pub salary_component_service: Arc<SalaryComponentService>,
+    pub(crate) compensation_change_service: Arc<CompensationChangeService>,
+    pub(crate) payroll_entry_service: Arc<PayrollEntryService>,
+    pub(crate) salary_slip_service: Arc<SalarySlipService>,
+    pub(crate) salary_slip_line_service: Arc<SalarySlipLineService>,
+    pub(crate) salary_structure_service: Arc<SalaryStructureService>,
+    pub(crate) salary_component_service: Arc<SalaryComponentService>,
+    // <<< CUSTOM FIELDS
+    // END CUSTOM
 }
 
 impl PayrollModule {
@@ -72,8 +77,21 @@ impl PayrollModule {
     /// create invalid rows or soft-delete a referenced master out from under its
     /// dependents. Prefer a guarded composition (read + validated writes) for any
     /// real deployment; use this only in trusted/admin/seeding contexts.
+    ///
+    /// Exception: `CompensationChange` is mounted **read-only** here. It is an
+    /// append-only compensation ledger whose rows are written solely by the
+    /// lifecycle event handlers (promotion / offboarding / onboarding) with
+    /// `reference_id` idempotency — exposing generic create/update/delete over
+    /// HTTP would let callers rewrite or delete history and break that invariant.
+    /// HTTP access is therefore limited to the GET endpoints; writes go through
+    /// the event consumers (or `individual::compensation_change_routes`).
+    // NOTE: regen-safe? The mount swap below uses the codegen-provided
+    // `create_compensation_change_read_routes`. A future `metaphor schema` regen
+    // re-emits this fn with the full-CRUD mount — the durable fix lives in the
+    // metaphor-schema route template (append-only entity -> read-only default).
     pub fn all_crud_routes(&self) -> Router {
         use presentation::http::{
+            create_compensation_change_read_routes,
             create_payroll_entry_routes,
             create_salary_slip_routes,
             create_salary_slip_line_routes,
@@ -82,6 +100,7 @@ impl PayrollModule {
         };
 
         Router::new()
+            .merge(create_compensation_change_read_routes(self.compensation_change_service.clone()))
             .merge(create_payroll_entry_routes(self.payroll_entry_service.clone()))
             .merge(create_salary_slip_routes(self.salary_slip_service.clone()))
             .merge(create_salary_slip_line_routes(self.salary_slip_line_service.clone()))
@@ -127,6 +146,10 @@ impl PayrollModuleBuilder {
         let db_pool = self.db_pool
             .ok_or_else(|| anyhow::anyhow!("Database pool not configured"))?;
 
+        // CompensationChange service
+        let compensation_change_repository = Arc::new(CompensationChangeRepository::new(db_pool.clone()));
+        let compensation_change_service = Arc::new(CompensationChangeService::with_repository(compensation_change_repository.clone()));
+
         // PayrollEntry service
         let payroll_entry_repository = Arc::new(PayrollEntryRepository::new(db_pool.clone()));
         let payroll_entry_service = Arc::new(PayrollEntryService::with_repository(payroll_entry_repository.clone()));
@@ -151,6 +174,7 @@ impl PayrollModuleBuilder {
         // END CUSTOM
 
         Ok(PayrollModule {
+            compensation_change_service,
             payroll_entry_service,
             salary_slip_service,
             salary_slip_line_service,
