@@ -18,6 +18,7 @@ models:
   - name: CompensationChange
     collection: compensation_changes
     description: "Append-only log of compensation changes; payroll-side receiver for lifecycle compound events."
+    read_only: true
 
     fields:
       id:
