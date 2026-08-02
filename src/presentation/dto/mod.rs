@@ -5,6 +5,7 @@
 //! This module provides DTOs for the presentation layer,
 //! with validation and OpenAPI schema support.
 
+pub mod compensation_change_dto;
 pub mod payroll_entry_dto;
 pub mod salary_slip_dto;
 pub mod salary_slip_line_dto;
@@ -12,6 +13,14 @@ pub mod salary_structure_dto;
 pub mod salary_component_dto;
 
 // Re-exports
+pub use compensation_change_dto::{
+    CreateCompensationChangeDto,
+    UpdateCompensationChangeDto,
+    PatchCompensationChangeDto,
+    CompensationChangeResponseDto,
+    CompensationChangeListResponseDto,
+    CompensationChangeSummaryDto,
+};
 pub use payroll_entry_dto::{
     CreatePayrollEntryDto,
     UpdatePayrollEntryDto,

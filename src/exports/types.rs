@@ -7,9 +7,69 @@
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDate};
 use rust_decimal::Decimal;
 use crate::domain::entity::*;
+
+// ============================================================================
+// COMPENSATIONCHANGE TYPES
+// ============================================================================
+
+/// Type-safe ID for CompensationChange
+///
+/// Use this instead of raw Uuid for type safety across modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CompensationChangeId(pub Uuid);
+
+impl CompensationChangeId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+}
+
+impl From<Uuid> for CompensationChangeId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<CompensationChangeId> for Uuid {
+    fn from(id: CompensationChangeId) -> Self {
+        id.0
+    }
+}
+
+/// Data transfer object for CompensationChange
+///
+/// This is the public representation of CompensationChange for other modules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompensationChangeDto {
+    pub id: CompensationChangeId,
+    pub company_id: Uuid,
+    pub employee_id: Uuid,
+    pub change_type: CompensationChangeType,
+    pub new_amount: Option<Decimal>,
+    pub effective_date: Option<NaiveDate>,
+    pub reference_id: Option<Uuid>,
+    pub note: Option<String>,
+    pub metadata: serde_json::Value,
+}
+
+/// Summary view of CompensationChange for list displays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompensationChangeSummary {
+    pub id: CompensationChangeId,
+}
+
+/// Reference to CompensationChange for foreign key relationships
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompensationChangeRef {
+    pub id: CompensationChangeId,
+}
 
 // ============================================================================
 // PAYROLLENTRY TYPES

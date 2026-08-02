@@ -8,7 +8,7 @@
 //! ## Usage from other modules
 //!
 //! ```text
-//! use payroll::exports::{PayrollEntryDto, PayrollQueryService};
+//! use payroll::exports::{CompensationChangeDto, PayrollQueryService};
 //! ```
 
 mod types;
@@ -27,6 +27,9 @@ pub use events::*;
 /// Summary of what this module exports
 ///
 /// ## Public Types
+/// - `CompensationChangeDto` - Data transfer object for CompensationChange
+/// - `CompensationChangeSummary` - Summary view of CompensationChange
+/// - `CompensationChangeId` - Type-safe ID wrapper
 /// - `PayrollEntryDto` - Data transfer object for PayrollEntry
 /// - `PayrollEntrySummary` - Summary view of PayrollEntry
 /// - `PayrollEntryId` - Type-safe ID wrapper
@@ -47,6 +50,9 @@ pub use events::*;
 /// - `PayrollQueryService` - Read-only queries
 ///
 /// ## Public Events
+/// - `CompensationChangeCreatedEvent` - Published when CompensationChange is created
+/// - `CompensationChangeUpdatedEvent` - Published when CompensationChange is updated
+/// - `CompensationChangeDeletedEvent` - Published when CompensationChange is deleted
 /// - `PayrollEntryCreatedEvent` - Published when PayrollEntry is created
 /// - `PayrollEntryUpdatedEvent` - Published when PayrollEntry is updated
 /// - `PayrollEntryDeletedEvent` - Published when PayrollEntry is deleted

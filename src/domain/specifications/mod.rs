@@ -6,6 +6,7 @@
 
 pub use backbone_core::{Specification, AndSpecification, OrSpecification, NotSpecification};
 
+pub mod compensation_change_specification;
 pub mod payroll_entry_specification;
 pub mod salary_slip_specification;
 pub mod salary_slip_line_specification;

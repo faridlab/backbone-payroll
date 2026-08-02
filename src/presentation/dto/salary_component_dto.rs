@@ -295,3 +295,4 @@ impl backbone_core::ApplyUpdateDto<UpdateSalaryComponentDto> for SalaryComponent
 // Add custom DTOs specific to SalaryComponent here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

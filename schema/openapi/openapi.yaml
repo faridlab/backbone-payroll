@@ -11,6 +11,8 @@ servers:
     description: Development server
 
 tags:
+  - name: CompensationChanges
+    description: CompensationChange management endpoints
   - name: PayrollEntries
     description: PayrollEntry management endpoints
   - name: SalarySlips
@@ -23,6 +25,372 @@ tags:
     description: SalaryComponent management endpoints
 
 paths:
+  /api/v1/compensation_changes:
+    get:
+      tags:
+        - CompensationChanges
+      summary: List CompensationChanges
+      description: Get a paginated list of CompensationChanges with optional filtering and sorting
+      operationId: listCompensationChanges
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - $ref: '#/components/parameters/SortByParam'
+        - $ref: '#/components/parameters/SortOrderParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChangeList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - CompensationChanges
+      summary: Create CompensationChange
+      description: Create a new CompensationChange
+      operationId: createCompensationChange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompensationChangeRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChange'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/compensation_changes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    get:
+      tags:
+        - CompensationChanges
+      summary: Get CompensationChange by ID
+      operationId: getCompensationChange
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChange'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - CompensationChanges
+      summary: Update CompensationChange (full)
+      operationId: updateCompensationChange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCompensationChangeRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChange'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - CompensationChanges
+      summary: Update CompensationChange (partial)
+      operationId: patchCompensationChange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchCompensationChangeRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChange'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - CompensationChanges
+      summary: Delete CompensationChange (soft)
+      operationId: deleteCompensationChange
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/compensation_changes/bulk:
+    post:
+      tags:
+        - CompensationChanges
+      summary: Bulk create CompensationChanges
+      operationId: bulkCreateCompensationChanges
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateCompensationChangeRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CompensationChange'
+    put:
+      tags:
+        - CompensationChanges
+      summary: Bulk update CompensationChanges (full, atomic)
+      operationId: bulkUpdateCompensationChanges
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                allOf:
+                  - type: object
+                    required: [id]
+                    properties:
+                      id:
+                        type: string
+                  - $ref: '#/components/schemas/UpdateCompensationChangeRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChangeBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags:
+        - CompensationChanges
+      summary: Bulk partial-update CompensationChanges (atomic)
+      operationId: bulkPatchCompensationChanges
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [ids, patch]
+                  properties:
+                    ids:
+                      type: array
+                      items: { type: string }
+                    patch:
+                      type: object
+                      additionalProperties: true
+                - type: object
+                  required: [items]
+                  properties:
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, patch]
+                        properties:
+                          id: { type: string }
+                          patch: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChangeBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/compensation_changes/upsert:
+    post:
+      tags:
+        - CompensationChanges
+      summary: Upsert CompensationChange
+      operationId: upsertCompensationChange
+      parameters:
+        - name: key_field
+          in: query
+          schema:
+            type: string
+        - name: key_value
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCompensationChangeRequest'
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChange'
+
+  /api/v1/compensation_changes/trash:
+    get:
+      tags:
+        - CompensationChanges
+      summary: List deleted CompensationChanges
+      operationId: listDeletedCompensationChanges
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChangeList'
+
+  /api/v1/compensation_changes/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+    post:
+      tags:
+        - CompensationChanges
+      summary: Restore deleted CompensationChange
+      operationId: restoreCompensationChange
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChange'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/compensation_changes/empty:
+    delete:
+      tags:
+        - CompensationChanges
+      summary: Empty trash for CompensationChanges
+      operationId: emptyTrashCompensationChanges
+      responses:
+        '200':
+          description: Trash emptied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+
+  /api/v1/compensation_changes/delete/bulk:
+    post:
+      tags:
+        - CompensationChanges
+      summary: Bulk soft-delete CompensationChanges by ids (atomic)
+      operationId: bulkDeleteCompensationChanges
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Soft-deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  soft_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/compensation_changes/restore/bulk:
+    post:
+      tags:
+        - CompensationChanges
+      summary: Bulk restore CompensationChanges by ids (atomic)
+      operationId: bulkRestoreCompensationChanges
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompensationChangeBulkResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/compensation_changes/restore/all:
+    post:
+      tags:
+        - CompensationChanges
+      summary: Restore all soft-deleted CompensationChanges
+      operationId: restoreAllCompensationChanges
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored: { type: integer }
+
+  /api/v1/compensation_changes/trash/bulk:
+    delete:
+      tags:
+        - CompensationChanges
+      summary: Bulk permanently-delete CompensationChanges from trash by ids (atomic)
+      operationId: bulkPermanentDeleteCompensationChanges
+      requestBody:
+        $ref: '#/components/requestBodies/BatchIds'
+      responses:
+        '200':
+          description: Permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permanently_deleted: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
   /api/v1/payroll_entries:
     get:
       tags:
@@ -1855,6 +2223,160 @@ paths:
 
 components:
   schemas:
+    CompensationChange:
+      type: object
+      required:
+        - id
+        - company_id
+        - employee_id
+        - change_type
+        - metadata
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        change_type:
+          type: string
+        new_amount:
+          nullable: true
+          type: string
+        effective_date:
+          nullable: true
+          type: string
+          format: date
+        reference_id:
+          nullable: true
+          type: string
+          format: uuid
+        note:
+          nullable: true
+          type: string
+        metadata:
+          type: object
+
+    CompensationChangeBulkResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompensationChange'
+        total: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+
+    CreateCompensationChangeRequest:
+      type: object
+      required:
+        - company_id
+        - employee_id
+        - change_type
+        - metadata
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        change_type:
+          type: string
+        new_amount:
+          nullable: true
+          type: string
+        effective_date:
+          nullable: true
+          type: string
+          format: date
+        reference_id:
+          nullable: true
+          type: string
+          format: uuid
+        note:
+          nullable: true
+          type: string
+        metadata:
+          type: object
+
+    UpdateCompensationChangeRequest:
+      type: object
+      required:
+        - company_id
+        - employee_id
+        - change_type
+        - metadata
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        change_type:
+          type: string
+        new_amount:
+          nullable: true
+          type: string
+        effective_date:
+          nullable: true
+          type: string
+          format: date
+        reference_id:
+          nullable: true
+          type: string
+          format: uuid
+        note:
+          nullable: true
+          type: string
+        metadata:
+          type: object
+
+    PatchCompensationChangeRequest:
+      type: object
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        employee_id:
+          type: string
+          format: uuid
+        change_type:
+          type: string
+        new_amount:
+          nullable: true
+          type: string
+        effective_date:
+          nullable: true
+          type: string
+          format: date
+        reference_id:
+          nullable: true
+          type: string
+          format: uuid
+        note:
+          nullable: true
+          type: string
+        metadata:
+          type: object
+
+    CompensationChangeList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompensationChange'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
     PayrollEntry:
       type: object
       required:

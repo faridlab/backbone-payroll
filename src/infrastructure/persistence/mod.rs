@@ -4,6 +4,7 @@
 //!
 //! Uses backbone-orm's `DatabaseOperations<T>` trait.
 
+mod compensation_change_repository;
 mod payroll_entry_repository;
 mod salary_slip_repository;
 mod salary_slip_line_repository;
@@ -15,6 +16,7 @@ mod salary_component_repository;
 // END CUSTOM
 
 // Re-exports
+pub use compensation_change_repository::CompensationChangeRepository;
 pub use payroll_entry_repository::PayrollEntryRepository;
 pub use salary_slip_repository::SalarySlipRepository;
 pub use salary_slip_line_repository::SalarySlipLineRepository;

@@ -6,6 +6,7 @@
 //! Implementations should be in the infrastructure layer.
 
 
+pub mod compensation_change_repository;
 pub mod payroll_entry_repository;
 pub mod salary_slip_repository;
 pub mod salary_slip_line_repository;
@@ -13,6 +14,12 @@ pub mod salary_structure_repository;
 pub mod salary_component_repository;
 
 // Re-exports
+pub use compensation_change_repository::{
+    CompensationChangeRepository,
+    CompensationChangePaginationParams,
+    CompensationChangePaginatedResult,
+    CompensationChangeFilter,
+};
 pub use payroll_entry_repository::{
     PayrollEntryRepository,
     PayrollEntryPaginationParams,

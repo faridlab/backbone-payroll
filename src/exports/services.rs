@@ -5,8 +5,6 @@
 //! These services provide the public API for other modules.
 //! They only expose read operations - writes go through events.
 
-use std::sync::Arc;
-
 use anyhow::Result;
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -23,6 +21,15 @@ use super::types::*;
 /// Implementations should NOT expose internal domain logic.
 #[async_trait]
 pub trait PayrollQueryService: Send + Sync {
+    /// Get CompensationChange by ID
+    async fn get_compensation_change(&self, id: CompensationChangeId) -> Result<Option<CompensationChangeDto>>;
+
+    /// Get CompensationChange summary by ID
+    async fn get_compensation_change_summary(&self, id: CompensationChangeId) -> Result<Option<CompensationChangeSummary>>;
+
+    /// Check if CompensationChange exists
+    async fn compensation_change_exists(&self, id: CompensationChangeId) -> Result<bool>;
+
     /// Get PayrollEntry by ID
     async fn get_payroll_entry(&self, id: PayrollEntryId) -> Result<Option<PayrollEntryDto>>;
 
@@ -68,21 +75,6 @@ pub trait PayrollQueryService: Send + Sync {
     /// Check if SalaryComponent exists
     async fn salary_component_exists(&self, id: SalaryComponentId) -> Result<bool>;
 
-}
-
-// ============================================================================
-// QUERY SERVICE IMPLEMENTATION
-// ============================================================================
-
-/// Default implementation of PayrollQueryService
-pub struct PayrollQueryServiceImpl<R> {
-    repository: Arc<R>,
-}
-
-impl<R> PayrollQueryServiceImpl<R> {
-    pub fn new(repository: Arc<R>) -> Self {
-        Self { repository }
-    }
 }
 
 // ============================================================================

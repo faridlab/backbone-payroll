@@ -7,6 +7,7 @@
 pub mod error;
 pub use error::{ServiceError, ServiceResult};
 
+pub mod compensation_change_service;
 pub mod payroll_entry_service;
 pub mod salary_slip_service;
 pub mod salary_slip_line_service;
@@ -29,6 +30,7 @@ pub mod offboarding_settlement_handler;
 pub mod onboarding_enrolled_handler;
 // END CUSTOM
 
+pub use compensation_change_service::CompensationChangeService;
 pub use payroll_entry_service::PayrollEntryService;
 pub use salary_slip_service::SalarySlipService;
 pub use salary_slip_line_service::SalarySlipLineService;

@@ -11,6 +11,33 @@ use chrono::{DateTime, Utc};
 use super::types::*;
 
 // ============================================================================
+// COMPENSATIONCHANGE EVENTS
+// ============================================================================
+
+/// Event published when a CompensationChange is created
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompensationChangeCreatedEvent {
+    pub id: CompensationChangeId,
+    pub data: CompensationChangeDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a CompensationChange is updated
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompensationChangeUpdatedEvent {
+    pub id: CompensationChangeId,
+    pub data: CompensationChangeDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a CompensationChange is deleted
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompensationChangeDeletedEvent {
+    pub id: CompensationChangeId,
+    pub occurred_at: DateTime<Utc>,
+}
+
+// ============================================================================
 // PAYROLLENTRY EVENTS
 // ============================================================================
 
@@ -153,6 +180,9 @@ pub struct SalaryComponentDeletedEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum PayrollEvent {
+    CompensationChangeCreated(CompensationChangeCreatedEvent),
+    CompensationChangeUpdated(CompensationChangeUpdatedEvent),
+    CompensationChangeDeleted(CompensationChangeDeletedEvent),
     PayrollEntryCreated(PayrollEntryCreatedEvent),
     PayrollEntryUpdated(PayrollEntryUpdatedEvent),
     PayrollEntryDeleted(PayrollEntryDeletedEvent),

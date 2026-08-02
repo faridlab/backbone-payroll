@@ -258,3 +258,4 @@ impl backbone_core::ApplyUpdateDto<UpdateSalaryStructureDto> for SalaryStructure
 // Add custom DTOs specific to SalaryStructure here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

@@ -12,3 +12,6 @@
 - salary_slip_line_seed
 - salary_structure_seed
 - salary_component_seed
+
+# Newly added seeds (preserve manual order above):
+- compensation_change_seed

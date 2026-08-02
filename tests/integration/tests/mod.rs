@@ -6,6 +6,7 @@
 
 pub mod crud_test_base;
 
+pub mod compensation_change_api_test;
 pub mod payroll_entry_api_test;
 pub mod salary_slip_api_test;
 pub mod salary_slip_line_api_test;
@@ -14,6 +15,7 @@ pub mod salary_component_api_test;
 
 // Re-exports for convenience
 pub use crud_test_base::*;
+pub use compensation_change_api_test::*;
 pub use payroll_entry_api_test::*;
 pub use salary_slip_api_test::*;
 pub use salary_slip_line_api_test::*;

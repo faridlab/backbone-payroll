@@ -55,6 +55,13 @@ entities:
     pagination:
       default_limit: 20
       max_limit: 100
+  compensation_change:
+    collection: compensation_changes
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
 tracing:
   enabled: true
   exporter: otlp
@@ -63,50 +70,49 @@ metrics:
   enabled: true
   endpoint: /metrics
   port: 9090
-
-# Indonesian statutory payroll rates (UU HPP / BPJS). All rates/brackets/PTKP/caps live here so they
-# can be revised without code changes (BPJS caps move yearly; PTKP/brackets move by law). Values are
-# quoted strings so rust_decimal deserializes them losslessly (floats would round). The
-# StatutoryConfig::default() in src/application/service/statutory_calcs.rs mirrors this block; when a
-# rate changes, update both (or just this file — the loader prefers it).
 statutory:
   pph21:
-    # Progressive income-tax brackets (annual IDR). Each taxes the slice strictly above its
-    # lower_bound up to (and including) its upper_bound; the top bracket is unbounded (null).
     brackets:
-      - { lower_bound: "0",           upper_bound: "60000000",    rate: "0.05" }
-      - { lower_bound: "60000000",    upper_bound: "250000000",   rate: "0.15" }
-      - { lower_bound: "250000000",   upper_bound: "500000000",   rate: "0.25" }
-      - { lower_bound: "500000000",   upper_bound: "5000000000",  rate: "0.30" }
-      - { lower_bound: "5000000000",  upper_bound: null,          rate: "0.35" }
-    # PTKP personal relief (annual IDR), keyed by lowercase tier label tk0..k3.
+    - lower_bound: '0'
+      upper_bound: '60000000'
+      rate: '0.05'
+    - lower_bound: '60000000'
+      upper_bound: '250000000'
+      rate: '0.15'
+    - lower_bound: '250000000'
+      upper_bound: '500000000'
+      rate: '0.25'
+    - lower_bound: '500000000'
+      upper_bound: '5000000000'
+      rate: '0.30'
+    - lower_bound: '5000000000'
+      upper_bound: null
+      rate: '0.35'
     ptkp_map:
-      tk0: "54000000"
-      tk1: "58500000"
-      tk2: "63000000"
-      tk3: "67500000"
-      k0:  "58500000"
-      k1:  "63000000"
-      k2:  "67500000"
-      k3:  "72000000"
-    # 20% surtax applied when the taxpayer has no NPWP (computed tax × 1.2).
-    npwp_surtax_multiplier: "1.2"
+      tk0: '54000000'
+      tk1: '58500000'
+      tk2: '63000000'
+      tk3: '67500000'
+      k0: '58500000'
+      k1: '63000000'
+      k2: '67500000'
+      k3: '72000000'
+    npwp_surtax_multiplier: '1.2'
   bpjs:
     kesehatan:
-      employee_rate: "0.01"      # 1%
-      employer_rate: "0.04"      # 4%
-      salary_cap:    "12000000"  # capped monthly salary base
+      employee_rate: '0.01'
+      employer_rate: '0.04'
+      salary_cap: '12000000'
     ketenagakerjaan:
-      jht_employee_rate: "0.02"   # 2%   (uncapped)
-      jht_employer_rate: "0.037"  # 3.7% (uncapped)
-      jp_employee_rate:  "0.01"   # 1%   (JP-capped)
-      jp_employer_rate:  "0.02"   # 2%   (JP-capped)
-      jp_salary_cap:     "10547400"
-      # JKK employer-only rate by risk class 1–5. Keys are strings (serde_yaml-safe).
+      jht_employee_rate: '0.02'
+      jht_employer_rate: '0.037'
+      jp_employee_rate: '0.01'
+      jp_employer_rate: '0.02'
+      jp_salary_cap: '10547400'
       jkk_rates_by_risk_class:
-        "1": "0.0024"  # 0.24%
-        "2": "0.0054"  # 0.54%
-        "3": "0.0089"  # 0.89%
-        "4": "0.0127"  # 1.27%
-        "5": "0.0174"  # 1.74%
-      jkm_rate: "0.003"  # 0.3% (employer-only, uncapped)
+        '1': '0.0024'
+        '2': '0.0054'
+        '3': '0.0089'
+        '4': '0.0127'
+        '5': '0.0174'
+      jkm_rate: '0.003'

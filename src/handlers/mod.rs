@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 // Import all services
+use crate::application::service::CompensationChangeService;
 use crate::application::service::PayrollEntryService;
 use crate::application::service::SalarySlipService;
 use crate::application::service::SalarySlipLineService;
@@ -33,6 +34,8 @@ use crate::application::service::SalaryComponentService;
 /// ```
 #[derive(Clone)]
 pub struct AppState {
+    /// CompensationChange service
+    pub compensation_change_service: Arc<CompensationChangeService>,
     /// PayrollEntry service
     pub payroll_entry_service: Arc<PayrollEntryService>,
     /// SalarySlip service
@@ -48,6 +51,7 @@ pub struct AppState {
 impl AppState {
     /// Create a new AppState with all services.
     pub fn new(
+        compensation_change_service: Arc<CompensationChangeService>,
         payroll_entry_service: Arc<PayrollEntryService>,
         salary_slip_service: Arc<SalarySlipService>,
         salary_slip_line_service: Arc<SalarySlipLineService>,
@@ -55,6 +59,7 @@ impl AppState {
         salary_component_service: Arc<SalaryComponentService>
     ) -> Self {
         Self {
+            compensation_change_service,
             payroll_entry_service,
             salary_slip_service,
             salary_slip_line_service,
@@ -66,6 +71,7 @@ impl AppState {
     /// Create AppState from module instance.
     pub fn from_module(module: &crate::PayrollModule) -> Self {
         Self {
+            compensation_change_service: module.compensation_change_service.clone(),
             payroll_entry_service: module.payroll_entry_service.clone(),
             salary_slip_service: module.salary_slip_service.clone(),
             salary_slip_line_service: module.salary_slip_line_service.clone(),
@@ -80,6 +86,7 @@ impl AppState {
 /// Allows incremental construction of AppState.
 #[derive(Default)]
 pub struct AppStateBuilder {
+    compensation_change_service: Option<Arc<CompensationChangeService>>,
     payroll_entry_service: Option<Arc<PayrollEntryService>>,
     salary_slip_service: Option<Arc<SalarySlipService>>,
     salary_slip_line_service: Option<Arc<SalarySlipLineService>>,
@@ -91,6 +98,12 @@ impl AppStateBuilder {
     /// Create a new builder.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the CompensationChange service.
+    pub fn with_compensation_change_service(mut self, service: Arc<CompensationChangeService>) -> Self {
+        self.compensation_change_service = Some(service);
+        self
     }
 
     /// Set the PayrollEntry service.
@@ -130,6 +143,7 @@ impl AppStateBuilder {
     /// Panics if any required service is not set.
     pub fn build(self) -> AppState {
         AppState {
+            compensation_change_service: self.compensation_change_service.expect("compensation_change_service is required"),
             payroll_entry_service: self.payroll_entry_service.expect("payroll_entry_service is required"),
             salary_slip_service: self.salary_slip_service.expect("salary_slip_service is required"),
             salary_slip_line_service: self.salary_slip_line_service.expect("salary_slip_line_service is required"),

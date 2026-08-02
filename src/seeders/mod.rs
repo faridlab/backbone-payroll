@@ -9,12 +9,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 use sqlx::PgPool;
 
+mod compensation_change_seeder;
 mod payroll_entry_seeder;
 mod salary_slip_seeder;
 mod salary_slip_line_seeder;
 mod salary_structure_seeder;
 mod salary_component_seeder;
 
+pub use compensation_change_seeder::SeedCompensationChangeSeeder;
 pub use payroll_entry_seeder::SeedPayrollEntrySeeder;
 pub use salary_slip_seeder::SeedSalarySlipSeeder;
 pub use salary_slip_line_seeder::SeedSalarySlipLineSeeder;
@@ -61,8 +63,6 @@ pub enum SeederType {
     Development,
     /// Test data (for automated tests)
     Test,
-// <<< CUSTOM SEEDERS START >>>
-// Add custom seeders here.
 }
 
 // ============================================================================
@@ -72,3 +72,4 @@ pub enum SeederType {
 // <<< CUSTOM SEEDERS START >>>
 // Add custom seeders here
 // <<< CUSTOM SEEDERS END >>>
+

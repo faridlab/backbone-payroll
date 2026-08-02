@@ -36,7 +36,7 @@ impl Seeder for SeedSalaryStructureSeeder {
     }
 
     fn order(&self) -> i32 {
-        4
+        5
     }
 
     async fn should_run(&self, pool: &PgPool) -> Result<bool> {

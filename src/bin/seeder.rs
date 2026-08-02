@@ -12,6 +12,7 @@ use sqlx::postgres::PgPoolOptions;
 use std::env;
 
 // Import seeders
+use backbone_payroll::seeders::SeedCompensationChangeSeeder;
 use backbone_payroll::seeders::SeedPayrollEntrySeeder;
 use backbone_payroll::seeders::SeedSalarySlipSeeder;
 use backbone_payroll::seeders::SeedSalarySlipLineSeeder;
@@ -45,6 +46,7 @@ async fn main() -> Result<()> {
 
     // Register seeders in order
     let mut seeders: Vec<Box<dyn Seeder + Send + Sync>> = Vec::new();
+    seeders.push(Box::new(SeedCompensationChangeSeeder::new()));
     seeders.push(Box::new(SeedPayrollEntrySeeder::new()));
     seeders.push(Box::new(SeedSalarySlipSeeder::new()));
     seeders.push(Box::new(SeedSalarySlipLineSeeder::new()));
