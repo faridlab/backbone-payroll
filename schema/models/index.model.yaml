@@ -12,6 +12,12 @@
 module: payroll
 version: 2
 schema: payroll
+
+# ADR-0014 company fence (Wave 1 P0 sweep, 2026-08-16): payroll data carries the strongest ACL posture in the service (pillar-hrms
+# H-7) — strict: slip lines and structure components are embedded collections fenced
+# with their parents; compensation_changes shipped post-cleanup without a policy,
+# which this declaration closes.
+company_fence: strict
 description: "payroll domain module"
 
 config:
