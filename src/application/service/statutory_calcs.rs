@@ -28,6 +28,7 @@
 //!     complete, so well-formed deployments never see the error variants.
 
 use rust_decimal::{Decimal, RoundingStrategy};
+use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -51,9 +52,10 @@ fn money(d: Decimal) -> Decimal {
 /// is both type-safe and self-documenting where a `&str` key would not be.
 ///
 /// Variants: `Tk0..Tk3` (unmarried, 0–3 dependants) · `K0..K3` (married, 0–3 dependants).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PtkpTier {
+    #[default]
     Tk0,
     Tk1,
     Tk2,
@@ -105,9 +107,86 @@ impl std::str::FromStr for PtkpTier {
     }
 }
 
-impl Default for PtkpTier {
+impl Default for OvertimeConfig {
     fn default() -> Self {
-        Self::Tk0
+        StatutoryConfig::default().overtime
+    }
+}
+
+// ============================================================================
+// TerCategory + Pph21Method — local mirrors of backbone_employee's tax axis
+// ============================================================================
+
+/// PPh-21 average-effective-rate (TER) category — which TER rate table the monthly withholding
+/// dispatches to.
+///
+/// Mirrors `backbone_employee::domain::entity::TerCategory` 1:1 (same variants, same wire encoding),
+/// for the same reason [`PtkpTier`] is mirrored: the shipped library has no Cargo edge to the
+/// employee module, and the slip-assembly layer maps via the string round-trip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TerCategory {
+    #[default]
+    TerA,
+    TerB,
+    TerC,
+}
+
+impl TerCategory {
+    /// Stable lowercase key indexing [`Pph21Config::ter`] — matches the DB `category` values and
+    /// `backbone_employee::TerCategory`'s `Display` output.
+    pub fn key(self) -> &'static str {
+        match self {
+            TerCategory::TerA => "ter_a",
+            TerCategory::TerB => "ter_b",
+            TerCategory::TerC => "ter_c",
+        }
+    }
+}
+
+impl std::fmt::Display for TerCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.key())
+    }
+}
+
+impl std::str::FromStr for TerCategory {
+    type Err = StatutoryError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "ter_a" => Ok(Self::TerA),
+            "ter_b" => Ok(Self::TerB),
+            "ter_c" => Ok(Self::TerC),
+            other => Err(StatutoryError::UnknownTerCategory(other.to_string())),
+        }
+    }
+}
+
+/// Which PPh-21 path a slip dispatches to. `NpwpBrackets` is the annualized progressive-bracket
+/// computation ([`pph21`]); `Ter(category)` is the monthly average-effective-rate table lookup
+/// ([`pph21_ter`]). The employee's tax row picks: `ter_category` NULL → brackets, else that TER
+/// category. `tax_method` (gross/gross_up/netto) is a DIFFERENT axis (gross-up treatment) and does
+/// not appear here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pph21Method {
+    NpwpBrackets,
+    Ter(TerCategory),
+}
+
+impl Pph21Method {
+    /// The audit label stamped on the slip (`npwp_brackets | ter_a | ter_b | ter_c`).
+    pub fn label(&self) -> &'static str {
+        match self {
+            Pph21Method::NpwpBrackets => "npwp_brackets",
+            Pph21Method::Ter(c) => c.key(),
+        }
+    }
+}
+
+impl std::fmt::Display for Pph21Method {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
     }
 }
 
@@ -131,6 +210,22 @@ pub enum StatutoryError {
     /// A config file could not be read.
     #[error("statutory config I/O error: {0}")]
     Io(#[from] std::io::Error),
+    /// The TER category is not one of `ter_a|ter_b|ter_c` (interop failure with the employee axis).
+    #[error("unknown TER category '{0}' — expected ter_a | ter_b | ter_c")]
+    UnknownTerCategory(String),
+    /// No TER bands are effective for the category — TER must fail closed, never zero-tax.
+    #[error("no TER rates configured for category '{0}' — seed effective-dated ter_rates rows for the period")]
+    NoTerRates(String),
+    /// No overtime multiplier bands are configured — overtime pay must fail closed, never zero-pay.
+    #[error("no overtime multiplier bands configured — seed effective-dated overtime rows for the period")]
+    MissingOvertimeBands,
+    /// A parameter table has no rows effective at the requested date (as-of loader only).
+    #[error("no statutory parameters effective for {1} in country '{0}' — seed the parameter tables for that period")]
+    NoParamsForPeriod(String, String),
+    /// A parameter-table read failed at the database (as-of loader only). Infrastructure failure —
+    /// distinct from `NoParamsForPeriod`, which is a data-presence failure the caller maps to 422.
+    #[error("statutory parameter read failed: {0}")]
+    Db(#[from] sqlx::Error),
 }
 
 // ============================================================================
@@ -147,6 +242,10 @@ pub struct StatutoryConfig {
     pub pph21: Pph21Config,
     #[serde(default)]
     pub bpjs: BpjsConfig,
+    /// Overtime multiplier bands. Distinct from the other two blocks in that it is pay math, not a
+    /// withholding — but it shares the same as-of/effective-dated lifecycle, so it lives here.
+    #[serde(default)]
+    pub overtime: OvertimeConfig,
 }
 
 /// PPh 21 configuration: progressive tax brackets + PTKP relief map + NPWP surtax multiplier.
@@ -162,6 +261,48 @@ pub struct Pph21Config {
     /// Multiplier applied to computed tax when the taxpayer has no NPWP (default `1.2` = 20% surtax).
     #[serde(default = "default_npwp_surtax")]
     pub npwp_surtax_multiplier: Decimal,
+    /// TER (average effective rate) bands keyed by category (`"ter_a".."ter_c"`), each list sorted by
+    /// `lower_bound` ascending. A category with no entry (or an empty list) fails closed — TER never
+    /// silently degrades to zero tax. Empty by default in serde (the DB loader fills it from the
+    /// effective-dated rows); [`StatutoryConfig::default`] seeds the starter bands.
+    #[serde(default)]
+    pub ter: HashMap<String, Vec<TerRateBand>>,
+}
+
+/// One TER band: monthly bases from `lower_bound` (inclusive) up to the next band's `lower_bound`
+/// are withheld at `rate`. The first band's `lower_bound` is normally zero.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerRateBand {
+    pub lower_bound: Decimal,
+    pub rate: Decimal,
+}
+
+/// Overtime configuration: the monthly-hours divisor plus the multiplier bands over the hour
+/// sequence, per day kind. Rest-day bands are carried for completeness (the regulation defines
+/// them) but the workday schedule is the only one the pay calc dispatches to today.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OvertimeConfig {
+    /// Hours in a normal month — the divisor that maps monthly salary to one hour's pay (173 by
+    /// regulation).
+    #[serde(default = "default_overtime_hours_per_month")]
+    pub hours_per_month: Decimal,
+    /// Workday multiplier bands sorted by `hour_from` ascending (hour 1 → 1.5×, hours 2+ → 2×).
+    #[serde(default = "default_overtime_workday_bands")]
+    pub workday: Vec<OvertimeBand>,
+    /// Rest-day bands (first 8 hours → 2×, 9th+ → 3×). Seeded, not dispatched by the workday pay
+    /// path — kept so a rest-day-aware caller can resolve them without a second config source.
+    #[serde(default = "default_overtime_restday_bands")]
+    pub rest_day: Vec<OvertimeBand>,
+}
+
+/// One multiplier band over the overtime hour sequence: hours `hour_from..=hour_to` (1-based, from
+/// the start of the overtime stretch) are paid at `multiplier` × the hourly rate. `hour_to: None`
+/// is open-ended.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OvertimeBand {
+    pub hour_from: i32,
+    pub hour_to: Option<i32>,
+    pub multiplier: Decimal,
 }
 
 /// One progressive-tax bracket. `upper_bound = None` means unbounded (the top bracket).
@@ -255,6 +396,21 @@ fn default_jp_cap() -> Decimal {
 fn default_jkm() -> Decimal {
     Decimal::new(3, 3) // 0.003
 }
+fn default_overtime_hours_per_month() -> Decimal {
+    Decimal::new(173, 0)
+}
+fn default_overtime_workday_bands() -> Vec<OvertimeBand> {
+    vec![
+        OvertimeBand { hour_from: 1, hour_to: Some(1), multiplier: Decimal::new(15, 1) }, // 1.5×
+        OvertimeBand { hour_from: 2, hour_to: None, multiplier: Decimal::new(2, 0) },    // 2×
+    ]
+}
+fn default_overtime_restday_bands() -> Vec<OvertimeBand> {
+    vec![
+        OvertimeBand { hour_from: 1, hour_to: Some(8), multiplier: Decimal::new(2, 0) },  // 2×
+        OvertimeBand { hour_from: 9, hour_to: None, multiplier: Decimal::new(3, 0) },    // 3×
+    ]
+}
 
 impl Default for StatutoryConfig {
     /// Current-law (UU HPP / BPJS 2024) statutory values. Kept in sync with the `statutory:` block
@@ -318,6 +474,7 @@ impl Default for StatutoryConfig {
                 brackets,
                 ptkp_map,
                 npwp_surtax_multiplier: default_npwp_surtax(),
+                ter: default_ter_rates(),
             },
             bpjs: BpjsConfig {
                 kesehatan: BpjsKesehatanConfig {
@@ -335,8 +492,83 @@ impl Default for StatutoryConfig {
                     jkm_rate: default_jkm(),
                 },
             },
+            overtime: OvertimeConfig {
+                hours_per_month: default_overtime_hours_per_month(),
+                workday: default_overtime_workday_bands(),
+                rest_day: default_overtime_restday_bands(),
+            },
         }
     }
+}
+
+/// The starter TER bands — a reduced, coarse-grained representation of the regulation's published
+/// table. These are SEED-SOURCE material: the authoritative copy lives in the effective-dated
+/// parameter tables seeded by migration and resolved as-of each payroll period; this Default exists
+/// so config-only deployments and tests have a complete, honest config. Corrections land as new
+/// effective-dated rows, never as edits here.
+fn default_ter_rates() -> HashMap<String, Vec<TerRateBand>> {
+    // One band row: lower bound (whole rupiah) + rate as a (mantissa, scale) pair.
+    fn band(lb: i64, rate_mantissa: i64, rate_scale: u32) -> TerRateBand {
+        TerRateBand { lower_bound: Decimal::new(lb, 0), rate: Decimal::new(rate_mantissa, rate_scale) }
+    }
+    // Rows per category, sorted ascending — identical to the seeded rows.
+    let bands: [(&str, Vec<TerRateBand>); 3] = [
+        (
+            "ter_a",
+            vec![
+                band(0, 0, 0),
+                band(5_400_000, 25, 4),  // 0.25%
+                band(6_600_000, 5, 3),   // 0.5%
+                band(7_800_000, 1, 2),   // 1%
+                band(8_900_000, 15, 3),  // 1.5%
+                band(9_650_000, 25, 3),  // 2.5%
+                band(10_350_000, 3, 2),  // 3%
+                band(12_100_000, 5, 2),  // 5%
+                band(15_400_000, 8, 2),  // 8%
+                band(19_500_000, 12, 2), // 12%
+                band(33_700_000, 17, 2), // 17%
+                band(45_500_000, 20, 2), // 20%
+            ],
+        ),
+        (
+            "ter_b",
+            vec![
+                band(0, 0, 0),
+                band(5_400_000, 5, 3),   // 0.5%
+                band(6_600_000, 1, 2),   // 1%
+                band(7_800_000, 2, 2),   // 2%
+                band(8_900_000, 35, 3),  // 3.5%
+                band(9_650_000, 45, 3),  // 4.5%
+                band(10_350_000, 65, 3), // 6.5%
+                band(12_100_000, 9, 2),  // 9%
+                band(15_400_000, 13, 2), // 13%
+                band(19_500_000, 17, 2), // 17%
+                band(33_700_000, 23, 2), // 23%
+                band(45_500_000, 27, 2), // 27%
+            ],
+        ),
+        (
+            "ter_c",
+            vec![
+                band(0, 0, 0),
+                band(5_400_000, 1, 2),   // 1%
+                band(6_600_000, 2, 2),   // 2%
+                band(7_800_000, 35, 3),  // 3.5%
+                band(8_900_000, 5, 2),   // 5%
+                band(9_650_000, 6, 2),   // 6%
+                band(10_350_000, 10, 2), // 10%
+                band(12_100_000, 13, 2), // 13%
+                band(15_400_000, 17, 2), // 17%
+                band(19_500_000, 21, 2), // 21%
+                band(33_700_000, 28, 2), // 28%
+                band(45_500_000, 32, 2), // 32%
+            ],
+        ),
+    ];
+    bands
+        .into_iter()
+        .map(|(cat, list)| (cat.to_string(), list))
+        .collect()
 }
 
 impl Default for Pph21Config {
@@ -475,6 +707,60 @@ pub fn pph21(
     Ok(money(monthly_tax))
 }
 
+/// **PPh 21 TER** — monthly withholding via the average-effective-rate table (the no-annualization
+/// path for employees whose tax row names a TER category).
+///
+/// Formula (PMK 168/2023): the TER base is the monthly gross minus the employment-insurance
+/// **employee** share only — `jht_employee + jp_employee`, i.e. JHT on uncapped salary + JP on
+/// JP-capped salary; the health-insurance employee share is NOT subtracted. The rate is the band of
+/// the category whose `lower_bound` is the greatest one `<= ter_base`; tax = `money(ter_base × rate)`,
+/// × `npwp_surtax_multiplier` (1.2) when the taxpayer has no NPWP.
+///
+/// The JHT/JP products enter the base **unrounded** (before the per-component 2-dp rounding the
+/// breakdown applies) so the base is the exact product difference — rounding here would drift the
+/// band edge for salaries sitting within a fraction of a sen of a boundary.
+///
+/// Fails closed: a category with no bands (or an empty list) is [`StatutoryError::NoTerRates`] —
+/// a missing table must never silently yield zero tax.
+pub fn pph21_ter(
+    category: TerCategory,
+    has_npwp: bool,
+    gross_monthly: Decimal,
+    cfg: &StatutoryConfig,
+) -> Result<Decimal, StatutoryError> {
+    let bands = cfg
+        .pph21
+        .ter
+        .get(category.key())
+        .filter(|list| !list.is_empty())
+        .ok_or_else(|| StatutoryError::NoTerRates(category.key().to_string()))?;
+
+    // Unrounded employment-insurance employee share (JHT uncapped, JP on its cap).
+    let tk = &cfg.bpjs.ketenagakerjaan;
+    let jp_base = if gross_monthly > tk.jp_salary_cap { tk.jp_salary_cap } else { gross_monthly };
+    let insurance_share = gross_monthly * tk.jht_employee_rate + jp_base * tk.jp_employee_rate;
+    let ter_base = (gross_monthly - insurance_share).max(Decimal::ZERO);
+
+    // Band = the greatest lower_bound <= ter_base (bands sorted ascending; base lands in the last
+    // band it reaches). A base below the first band's lower_bound (possible when the table starts
+    // above zero) matches no band → zero-rate band semantics do not apply; fail closed instead.
+    let mut rate: Option<Decimal> = None;
+    for b in bands {
+        if ter_base >= b.lower_bound {
+            rate = Some(b.rate);
+        } else {
+            break;
+        }
+    }
+    let rate = rate.ok_or_else(|| StatutoryError::NoTerRates(category.key().to_string()))?;
+
+    let mut tax = ter_base * rate;
+    if !has_npwp {
+        tax *= cfg.pph21.npwp_surtax_multiplier;
+    }
+    Ok(money(tax))
+}
+
 /// **BPJS Kesehatan** — health insurance (employee 1%, employer 4%, on salary capped at the cap).
 ///
 /// Returns `(employee, employer)` monthly contributions (IDR, 2 dp).
@@ -578,6 +864,54 @@ pub fn thr(monthly_salary: Decimal, tenure_months: Decimal) -> Decimal {
     money(monthly_salary * fraction)
 }
 
+/// **Overtime pay** — workday schedule (the only day kind dispatched today).
+///
+/// Hourly rate = `monthly_base / hours_per_month` (173 by regulation). `hours` walks the workday
+/// band sequence hour by hour — each full hour at its band's multiplier, a fractional final hour at
+/// its hour's multiplier pro-rata (e.g. 3.5h = h1×1.5 + h2×2 + h3×2 + h4×2×0.5). The sum is
+/// rounded once at the end. Rest-day/holiday schedules are seeded in config but intentionally not
+/// dispatched here; a rest-day-aware caller resolves them explicitly when that policy lands.
+///
+/// Fails closed on an empty/unstartable band table ([`StatutoryError::MissingOvertimeBands`]) —
+/// missing bands must never silently yield zero pay for real worked hours.
+pub fn overtime_pay(hours: Decimal, monthly_base: Decimal, cfg: &OvertimeConfig) -> Result<Decimal, StatutoryError> {
+    if hours <= Decimal::ZERO || monthly_base <= Decimal::ZERO {
+        return Ok(Decimal::ZERO);
+    }
+    if cfg.workday.is_empty() || cfg.hours_per_month <= Decimal::ZERO {
+        return Err(StatutoryError::MissingOvertimeBands);
+    }
+
+    let hourly = monthly_base / cfg.hours_per_month;
+    let whole = hours.floor();
+    let frac = hours - whole;
+    let mut total = Decimal::ZERO;
+
+    // Multiplier for the nth hour of the overtime stretch: the last band whose hour_from <= n.
+    // An hour beyond every band's range (gaps or an open end) is not payable — but a table whose
+    // FIRST band starts above hour 1 cannot price hour 1 at all, which is the fail-closed case.
+    let multiplier_for = |hour: i64| -> Option<Decimal> {
+        let mut found: Option<Decimal> = None;
+        for b in &cfg.workday {
+            if hour >= b.hour_from as i64 {
+                found = Some(b.multiplier);
+            } else {
+                break;
+            }
+        }
+        found
+    };
+
+    for h in 1..=(whole.to_i64().unwrap_or(i64::MAX)) {
+        total += hourly * multiplier_for(h).ok_or(StatutoryError::MissingOvertimeBands)?;
+    }
+    if frac > Decimal::ZERO {
+        let next = whole.to_i64().unwrap_or(i64::MAX) + 1;
+        total += hourly * multiplier_for(next).ok_or(StatutoryError::MissingOvertimeBands)? * frac;
+    }
+    Ok(money(total))
+}
+
 // ============================================================================
 // compute_statutory — the slip-assembly entry point
 // ============================================================================
@@ -607,24 +941,31 @@ impl StatutoryComponent {
 /// Compose every Indonesia statutory component for one employee's monthly pay into a slip-ready list.
 ///
 /// This is the seam between the (pure, employee-edge-free) calcs above and the slip-assembly layer:
-/// it takes the employee's statutory inputs as primitives (PTKP tier, NPWP presence) plus the gross
-/// monthly salary, the BPJS JKK `risk_class`, the THR tenure, and the [`StatutoryConfig`], and calls
-/// [`pph21`] / [`bpjs_kesehatan`] / [`bpjs_ketenagakerjaan`] / [`thr`] to produce:
+/// it takes the employee's statutory inputs as primitives (PTKP tier, NPWP presence, the PPh-21
+/// dispatch `method`) plus the gross monthly salary, the BPJS JKK `risk_class`, the THR tenure, and
+/// the [`StatutoryConfig`], and calls [`pph21`] / [`pph21_ter`] / [`bpjs_kesehatan`] /
+/// [`bpjs_ketenagakerjaan`] / [`thr`] to produce:
 ///
 /// - **THR** earning (tenure-pro-rated; omitted when tenure is zero → no THR), using the monthly gross
 ///   as the THR base (1× monthly salary).
-/// - **PPh 21** deduction (monthly withholding).
+/// - **PPh 21** deduction (monthly withholding; brackets or TER per `method`).
 /// - **BPJS Kesehatan** employee deduction (1% of capped salary).
 /// - **BPJS Ketenagakerjaan** employee deduction (JHT 2% + JP 1% of capped/uncapped salary).
+///
+/// Evaluation order is **BPJS first, PPh 21 last**: the TER base subtracts the employment-insurance
+/// employee share, so the insurance products must exist before the tax path runs. The output order
+/// is unchanged (THR, PPh 21, Kesehatan, Ketenagakerjaan).
 ///
 /// Only **employee-paid** deductions are emitted — employer shares (BPJS Kesehatan 4%, JKK, JKM, JP
 /// employer 2%, JHT employer 3.7%) are real costs but they are NOT withheld from the slip's net pay;
 /// they hit a separate employer-cost accrual that a different process books. Zero-amount components
 /// are dropped so the slip is not cluttered with no-op lines.
 ///
-/// Returns `Err` only if `risk_class` is unknown or the PTKP tier is absent from the config — both
-/// fail closed (a malformed config should never silently produce a wrong net pay).
+/// Returns `Err` on an unknown `risk_class`, a PTKP tier absent from the config, or (TER path) a
+/// missing band table — all fail closed (a malformed config should never silently produce a wrong
+/// net pay).
 pub fn compute_statutory(
+    method: Pph21Method,
     ptkp: PtkpTier,
     has_npwp: bool,
     gross_monthly: Decimal,
@@ -634,29 +975,35 @@ pub fn compute_statutory(
 ) -> Result<Vec<StatutoryComponent>, StatutoryError> {
     let mut out = Vec::new();
 
-    // THR earning first (it raises gross; the deductions below are not THR-taxable here — Indonesia
-    // taxes THR separately at year-end / on payment under a different scheme, so the monthly PPh 21
-    // base stays the ordinary gross).
+    // Insurance components FIRST — the TER tax base subtracts the employment-insurance employee
+    // share, so these must be resolved (and their config validated) before dispatching the tax path.
+    let (kes_employee, _kes_employer) = bpjs_kesehatan(gross_monthly, &cfg.bpjs);
+    let tk = bpjs_ketenagakerjaan(gross_monthly, risk_class, &cfg.bpjs)?;
+
+    // THR earning first in the OUTPUT (it raises gross; the deductions below are not THR-taxable
+    // here — Indonesia taxes THR separately at year-end / on payment under a different scheme, so
+    // the monthly PPh 21 base stays the ordinary gross).
     let thr_amt = thr(gross_monthly, thr_tenure_months);
     if thr_amt > Decimal::ZERO {
         out.push(StatutoryComponent::earning("THR", thr_amt));
     }
 
-    // PPh 21 monthly withholding on the ordinary gross.
-    let pph = pph21(ptkp, has_npwp, gross_monthly, &cfg.pph21)?;
+    // PPh 21 monthly withholding on the ordinary gross — dispatched by the employee's tax profile.
+    let pph = match method {
+        Pph21Method::NpwpBrackets => pph21(ptkp, has_npwp, gross_monthly, &cfg.pph21)?,
+        Pph21Method::Ter(category) => pph21_ter(category, has_npwp, gross_monthly, cfg)?,
+    };
     if pph > Decimal::ZERO {
         out.push(StatutoryComponent::deduction("PPh 21", pph));
     }
 
     // BPJS Kesehatan — employee share only (1% of capped salary).
-    let (kes_employee, _kes_employer) = bpjs_kesehatan(gross_monthly, &cfg.bpjs);
     if kes_employee > Decimal::ZERO {
         out.push(StatutoryComponent::deduction("BPJS Kesehatan", kes_employee));
     }
 
     // BPJS Ketenagakerjaan — employee share only (JHT + JP). Employer components (JHT-er, JP-er, JKK,
     // JKM) are an employer cost, not a slip deduction.
-    let tk = bpjs_ketenagakerjaan(gross_monthly, risk_class, &cfg.bpjs)?;
     if tk.employee_total > Decimal::ZERO {
         out.push(StatutoryComponent::deduction("BPJS Ketenagakerjaan", tk.employee_total));
     }
@@ -804,8 +1151,7 @@ mod tests {
     fn bpjs_tk_unknown_risk_class_errors() {
         // Class 9 is not configured → fail closed with UnknownRiskClass.
         let err = bpjs_ketenagakerjaan(Decimal::new(10_000_000, 0), 9, &cfg().bpjs)
-            .err()
-            .expect("class 9 should be unknown");
+            .expect_err("class 9 should be unknown");
         assert!(matches!(err, StatutoryError::UnknownRiskClass(9)));
     }
 
@@ -899,6 +1245,7 @@ mod tests {
         //   BPJS TK emp (JHT+JP)  = 2%×12M + 1%×10,547,400 = 240,000 + 105,474 = 345,474
         // total deductions = 625,000 + 120,000 + 345,474 = 1,090,474.
         let comps = compute_statutory(
+            Pph21Method::NpwpBrackets,
             PtkpTier::Tk0,
             true,
             Decimal::new(12_000_000, 0),
@@ -930,6 +1277,7 @@ mod tests {
     fn compute_statutory_zero_tenure_drops_thr() {
         // Tenure 0 → THR is 0 → omitted. The three deductions remain (they don't depend on tenure).
         let comps = compute_statutory(
+            Pph21Method::NpwpBrackets,
             PtkpTier::Tk0,
             true,
             Decimal::new(12_000_000, 0),
@@ -940,5 +1288,205 @@ mod tests {
         .unwrap();
         assert!(!comps.iter().any(|c| c.name == "THR"), "zero-tenure THR must be dropped");
         assert_eq!(comps.len(), 3, "PPh21 + BPJS Kesehatan + BPJS TK only");
+    }
+
+    // ---- PPh 21 TER (starter bands — values documented as non-authoritative seed data) ------
+
+    #[test]
+    fn pph21_ter_a_10m_base_9_7m_is_242500() {
+        // TER A, gross 10M: JHT emp 2%×10M = 200,000 + JP emp 1%×10M = 100,000 → base 9,700,000.
+        // Band [9,650,000, 10,350,000) → 2.5% → 9.7M × 0.025 = 242,500.
+        let tax = pph21_ter(
+            TerCategory::TerA,
+            true,
+            Decimal::new(10_000_000, 0),
+            &cfg(),
+        )
+        .expect("ter_a bands are seeded");
+        assert_eq!(tax, Decimal::new(242_500, 0));
+    }
+
+    #[test]
+    fn pph21_ter_a_no_npwp_is_291000() {
+        // Same case without NPWP → 242,500 × 1.2 = 291,000.
+        let tax = pph21_ter(
+            TerCategory::TerA,
+            false,
+            Decimal::new(10_000_000, 0),
+            &cfg(),
+        )
+        .unwrap();
+        assert_eq!(tax, Decimal::new(291_000, 0));
+    }
+
+    #[test]
+    fn pph21_ter_base_uses_unrounded_insurance_products() {
+        // A gross whose JHT+JP products are fractional in sen: gross 9,999,999.99 →
+        // share = 0.03 × gross (both components uncapped at this salary) = 299,999.9997 →
+        // base = 9,699,999.9903 (NOT 9,699,999.99 — the rounded per-component breakdown would
+        // subtract a different number). Base lands mid-band [9.65M, 10.35M) → 2.5% →
+        // 242,499.9998… → 242,500.00. The mid-band rounding agrees either way; the band EDGE is
+        // where the unrounded base is load-bearing, pinned by the edge test below.
+        let tax = pph21_ter(
+            TerCategory::TerA,
+            true,
+            Decimal::from_str("9999999.99").unwrap(),
+            &cfg(),
+        )
+        .unwrap();
+        assert_eq!(tax, Decimal::from_str("242500.00").unwrap());
+    }
+
+    #[test]
+    fn pph21_ter_band_edge_is_lower_bound_inclusive() {
+        // Band selection is "greatest lower_bound <= base" — the bound itself belongs to the band
+        // that opens there. Pinned with a synthetic config (zero insurance rates, so base == gross
+        // exactly) whose ter_a bands open at a clean 1,000,000: a base exactly AT the bound takes
+        // the higher band; one sen below takes the lower one.
+        let mut c = cfg();
+        c.pph21.ter.insert(
+            "ter_a".into(),
+            vec![
+                TerRateBand { lower_bound: Decimal::ZERO, rate: Decimal::new(0, 0) },
+                TerRateBand { lower_bound: Decimal::new(1_000_000, 0), rate: Decimal::new(10, 2) },
+            ],
+        );
+        c.bpjs.ketenagakerjaan.jht_employee_rate = Decimal::ZERO;
+        c.bpjs.ketenagakerjaan.jp_employee_rate = Decimal::ZERO;
+
+        let at = pph21_ter(TerCategory::TerA, true, Decimal::new(1_000_000, 0), &c).unwrap();
+        assert_eq!(at, Decimal::new(100_000, 0), "base exactly at the bound is IN the band above");
+
+        let below = pph21_ter(TerCategory::TerA, true, Decimal::from_str("999999.99").unwrap(), &c).unwrap();
+        assert_eq!(below, Decimal::ZERO, "one sen below the bound is the lower band (0%)");
+    }
+
+    #[test]
+    fn pph21_ter_empty_table_fails_closed() {
+        // A config with no TER bands for the category must error, never zero-tax.
+        let mut c = cfg();
+        c.pph21.ter.remove("ter_a");
+        let err = pph21_ter(TerCategory::TerA, true, Decimal::new(10_000_000, 0), &c)
+            .expect_err("missing ter_a bands must fail");
+        assert!(matches!(err, StatutoryError::NoTerRates(cat) if cat == "ter_a"));
+
+        // An empty list is the same failure.
+        c.pph21.ter.insert("ter_a".into(), vec![]);
+        assert!(matches!(
+            pph21_ter(TerCategory::TerA, true, Decimal::new(10_000_000, 0), &c),
+            Err(StatutoryError::NoTerRates(_))
+        ));
+    }
+
+    #[test]
+    fn pph21_ter_high_base_uses_top_band() {
+        // TER C, gross 50M: JHT emp 1M + JP emp 105,474 (capped) → base 48,894,526 → top band
+        // [45.5M, ∞) → 32% → 48,894,526 × 0.32 = 15,646,248.32.
+        let tax = pph21_ter(
+            TerCategory::TerC,
+            true,
+            Decimal::new(50_000_000, 0),
+            &cfg(),
+        )
+        .unwrap();
+        assert_eq!(tax, Decimal::from_str("15646248.32").unwrap());
+    }
+
+    #[test]
+    fn pph21_ter_interops_with_compute_statutory_dispatch() {
+        // The dispatch honors the method: same employee inputs, TER A path replaces the brackets
+        // PPh 21 with the TER amount (242,500 at 10M gross) while BPJS lines stay identical.
+        let brackets = compute_statutory(
+            Pph21Method::NpwpBrackets,
+            PtkpTier::Tk0,
+            true,
+            Decimal::new(10_000_000, 0),
+            3,
+            Decimal::ZERO,
+            &cfg(),
+        )
+        .unwrap();
+        let ter = compute_statutory(
+            Pph21Method::Ter(TerCategory::TerA),
+            PtkpTier::Tk0,
+            true,
+            Decimal::new(10_000_000, 0),
+            3,
+            Decimal::ZERO,
+            &cfg(),
+        )
+        .unwrap();
+        let find = |v: &Vec<StatutoryComponent>, n: &str| {
+            v.iter().find(|c| c.name == n).map(|c| c.amount).unwrap()
+        };
+        // Brackets path at 10M gross TK0: annual 120M − 54M = 66M → 5%×60M + 15%×6M = 3.9M → /12 = 325,000.
+        assert_eq!(find(&brackets, "PPh 21"), Decimal::from_str("325000.00").unwrap());
+        assert_eq!(find(&ter, "PPh 21"), Decimal::new(242_500, 0));
+        // Insurance lines identical across the two paths.
+        assert_eq!(find(&brackets, "BPJS Kesehatan"), find(&ter, "BPJS Kesehatan"));
+        assert_eq!(find(&brackets, "BPJS Ketenagakerjaan"), find(&ter, "BPJS Ketenagakerjaan"));
+    }
+
+    // ---- overtime ----------------------------------------------------------------
+
+    #[test]
+    fn overtime_10h_at_8_7m_base_is_980635_84() {
+        // h1 → 1.5×, h2..h10 → 2× ⇒ 19.5 multiplier-hours; hourly = 8,700,000/173.
+        // 19.5 × 50,289.017341… = 980,635.8381… → 980,635.84.
+        let pay = overtime_pay(
+            Decimal::new(10, 0),
+            Decimal::new(8_700_000, 0),
+            &cfg().overtime,
+        )
+        .unwrap();
+        assert_eq!(pay, Decimal::from_str("980635.84").unwrap());
+    }
+
+    #[test]
+    fn overtime_first_hour_only_is_1_5x() {
+        // 1h → 1.5 × (10M/173) = 1.5 × 57,803.468… = 86,705.202… → 86,705.20.
+        let pay = overtime_pay(
+            Decimal::new(1, 0),
+            Decimal::new(10_000_000, 0),
+            &cfg().overtime,
+        )
+        .unwrap();
+        assert_eq!(pay, Decimal::from_str("86705.20").unwrap());
+    }
+
+    #[test]
+    fn overtime_fractional_hour_prorates_the_band() {
+        // 2.5h → 1.5×1 + 2×1 + 2×0.5 = 4.5 multiplier-hours at base 8.7M:
+        // 4.5 × 50,289.017341… = 226,300.578… → 226,300.58.
+        let pay = overtime_pay(
+            Decimal::from_str("2.5").unwrap(),
+            Decimal::new(8_700_000, 0),
+            &cfg().overtime,
+        )
+        .unwrap();
+        assert_eq!(pay, Decimal::from_str("226300.58").unwrap());
+    }
+
+    #[test]
+    fn overtime_zero_hours_or_base_is_zero() {
+        assert_eq!(overtime_pay(Decimal::ZERO, Decimal::new(10_000_000, 0), &cfg().overtime).unwrap(), Decimal::ZERO);
+        assert_eq!(overtime_pay(Decimal::new(3, 0), Decimal::ZERO, &cfg().overtime).unwrap(), Decimal::ZERO);
+    }
+
+    #[test]
+    fn overtime_missing_bands_fail_closed() {
+        let mut c = cfg();
+        c.overtime.workday = vec![];
+        assert!(matches!(
+            overtime_pay(Decimal::new(2, 0), Decimal::new(10_000_000, 0), &c.overtime),
+            Err(StatutoryError::MissingOvertimeBands)
+        ));
+    }
+
+    #[test]
+    fn pph21_method_labels_are_the_audit_stamp() {
+        assert_eq!(Pph21Method::NpwpBrackets.label(), "npwp_brackets");
+        assert_eq!(Pph21Method::Ter(TerCategory::TerB).label(), "ter_b");
+        assert_eq!(Pph21Method::Ter(TerCategory::TerC).to_string(), "ter_c");
     }
 }
