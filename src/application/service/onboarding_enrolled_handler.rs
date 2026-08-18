@@ -89,14 +89,21 @@ impl OnboardingEnrollInputs for PoolOnboardingEnrollInputs {
         // `base_salary` is NULL until HR records the joiner's starting salary. The read is scoped to
         // the latest non-deleted employee row (the metadata->>'deleted_at' audit column the framework
         // stamps). NULL/0 → None → the handler claims-but-skips.
-        let row: Option<(Option<Decimal>,)> = sqlx::query_as(
-            r#"SELECT base_salary
-                 FROM employee.employees
-                WHERE id = $1
-                  AND (metadata->>'deleted_at') IS NULL"#,
+        //
+        // Company-scoped (ADR-0008): the employee master sits behind the strict fence, so this runs
+        // through `fetch_optional_scoped` and the CALLER binds the event's company around the read —
+        // on the relay's app-role connection an unbound read sees zero rows and would silently turn
+        // every enrollment into claim-but-skip.
+        let row: Option<(Option<Decimal>,)> = backbone_orm::company_scope::fetch_optional_scoped(
+            &self.pool,
+            sqlx::query_as(
+                r#"SELECT base_salary
+                     FROM employee.employees
+                    WHERE id = $1
+                      AND (metadata->>'deleted_at') IS NULL"#,
+            )
+            .bind(employee_id),
         )
-        .bind(employee_id)
-        .fetch_optional(&self.pool)
         .await?;
         Ok(row
             .and_then(|(b,)| b)
@@ -145,8 +152,15 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
         let onboarding_id: Option<Uuid> = serde_json::from_value(p["onboarding_id"].clone()).ok();
 
         // Read the starting salary BEFORE the write tx (a best-effort snapshot read on the pool, the
-        // same pattern as lifecycle's PoolOffboardingInputs). None/0 → claim-but-skip.
-        let base_salary = self.inputs.starting_salary(employee_id).await.map_err(map_db)?;
+        // same pattern as lifecycle's PoolOffboardingInputs). None/0 → claim-but-skip. The read rides
+        // the event's company scope — the employee master is strictly fenced, so an ambient-scope-less
+        // read on the relay's app-role connection would see nothing (see the port impl above).
+        let base_salary = backbone_orm::company_scope::with_company_scope(
+            Some(company_id),
+            self.inputs.starting_salary(employee_id),
+        )
+        .await
+        .map_err(map_db)?;
 
         let mut tx = self.pool.begin().await.map_err(map_db)?;
 
