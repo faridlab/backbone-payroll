@@ -13,6 +13,7 @@ mod salary_component_repository;
 
 // Custom persistence modules
 // <<< CUSTOM
+mod statutory_params_repository;
 // END CUSTOM
 
 // Re-exports
@@ -34,9 +35,10 @@ pub use backbone_orm::repository::{
 // <<< CUSTOM
 // The hand-written payroll SQL's parameter/projection types (see the five `*_repository` modules, all
 // declared `user_owned` in metaphor.codegen.yaml).
-pub use payroll_entry_repository::{NewPayrollEntryRow, RunPostingRow, RunScopeRow};
+pub use payroll_entry_repository::{NewPayrollEntryRow, RunPeriodRow, RunPostingRow, RunScopeRow};
 pub use salary_component_repository::{ComponentRow, NewComponentRow};
 pub use salary_slip_line_repository::{DeductionGroupRow, NewSlipLineRow};
 pub use salary_slip_repository::{NewSalarySlipRow, SlipTotalsRow};
 pub use salary_structure_repository::NewStructureRow;
+pub use statutory_params_repository::StatutoryParamsRepository;
 // END CUSTOM
