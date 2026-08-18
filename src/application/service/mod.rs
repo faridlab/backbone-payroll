@@ -17,8 +17,15 @@ pub mod salary_component_service;
 // <<< CUSTOM
 pub mod payroll_gl;
 pub mod payroll_events;
+pub mod payroll_remittance;
 pub mod payroll_write_service;
 pub mod statutory_calcs;
+// Where a slip's overtime hours come from (attendance owns the time_debt semantics; the pool
+// default mirrors its exported read so payroll works standalone).
+pub mod overtime_port;
+// Where a slip's employee-side tax facts come from (the employee module owns them; the pool
+// default mirrors its exported read so payroll works standalone).
+pub mod employee_inputs_port;
 // ADR-005 consumers: the two payroll-side receivers for the lifecycle compound events. Each appends
 // a compensation_changes row idempotently (inbox dedup on the envelope id). Registered on the
 // integration bus in backbone-hr-app's main.rs.
@@ -38,19 +45,27 @@ pub use salary_structure_service::SalaryStructureService;
 pub use salary_component_service::SalaryComponentService;
 // <<< CUSTOM
 pub use payroll_gl::{
-    AccountingPostEnvelope, GlPostAck, GlPostLine, GlPostRejected, GlPostSink,
+    AccountingPostEnvelope, GlPostAck, GlPostLine, GlPostRejected, GlPostSink, UnwiredGlSink,
 };
 pub use payroll_events::{
-    LoggingSink, PayrollEvent, PayrollEventSink, PayrollPayable, PayrollPosted,
+    LoggingSink, PayrollEvent, PayrollEventError, PayrollEventSink, PayrollPayable, PayrollPosted,
+};
+pub use payroll_remittance::{
+    RemitAck, RemittanceInstruction, RemittanceSeamError, RemittanceSink, UnwiredRemittance,
 };
 pub use payroll_write_service::{
-    NewComponent, NewPayrollEntry, NewSalarySlip, NewStructure, PayrollError, PayrollWriteService,
-    PostOutcome, StatutoryLine,
+    ComputedSlipRequest, NewComponent, NewPayrollEntry, NewSalarySlip, NewStructure, PayrollError,
+    PayrollWriteService, PostOutcome, RemitOutcome, StatutoryAccounts, StatutoryLine,
+};
+pub use overtime_port::{OvertimeInputs, PoolOvertimeInputs};
+pub use employee_inputs_port::{
+    EmployeeStatutory, EmployeeStatutoryInputs, PoolEmployeeStatutoryInputs,
 };
 pub use statutory_calcs::{
-    bpjs_kesehatan, bpjs_ketenagakerjaan, compute_statutory, pph21, thr, BpjsConfig,
-    BpjsKesehatanConfig, BpjsTkBreakdown, BpjsTkConfig, Pph21Bracket, Pph21Config, PtkpTier,
-    StatutoryComponent, StatutoryConfig, StatutoryError,
+    bpjs_kesehatan, bpjs_ketenagakerjaan, compute_statutory, overtime_pay, pph21, pph21_ter, thr,
+    BpjsConfig, BpjsKesehatanConfig, BpjsTkBreakdown, BpjsTkConfig, OvertimeBand, OvertimeConfig,
+    Pph21Bracket, Pph21Config, Pph21Method, PtkpTier, StatutoryComponent, StatutoryConfig,
+    StatutoryError, TerCategory, TerRateBand,
 };
 pub use promotion_salary_handler::PromotionSalaryHandler;
 pub use offboarding_settlement_handler::OffboardingSettlementHandler;

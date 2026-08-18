@@ -13,8 +13,18 @@
 user_owned:
   - "src/application/service/payroll_events.rs"
   - "src/application/service/payroll_gl.rs"
+  - "src/application/service/payroll_remittance.rs"
   - "src/application/service/payroll_write_service.rs"
   - "src/application/service/statutory_calcs.rs"
+  # Where a slip's overtime hours come from — attendance owns the time_debt semantics; the pool
+  # default mirrors its exported read so payroll works standalone.
+  - "src/application/service/overtime_port.rs"
+  # Where a slip's employee-side tax facts come from — the employee module owns them; the pool
+  # default mirrors its exported read so payroll works standalone.
+  - "src/application/service/employee_inputs_port.rs"
+  # The guarded HTTP composition: entity reads + structure/component CRUD + the validated run
+  # verbs. No generic run/slip/slip-line mutation reaches the wire.
+  - "src/presentation/http/guarded_routes.rs"
   # ADR-005 consumers: lifecycle event handlers (idempotent inbox consumers).
   - "src/application/service/offboarding_settlement_handler.rs"
   - "src/application/service/onboarding_enrolled_handler.rs"
@@ -28,6 +38,9 @@ user_owned:
   - "src/infrastructure/persistence/salary_slip_line_repository.rs"
   - "src/infrastructure/persistence/salary_slip_repository.rs"
   - "src/infrastructure/persistence/salary_structure_repository.rs"
+  # As-of resolver over the effective-dated statutory parameter tables (the five seeded global
+  # masters). Not schema-derived — no entity, no CRUD surface.
+  - "src/infrastructure/persistence/statutory_params_repository.rs"
   - "tests/integrity_probes.rs"
   - "tests/payroll_gl_seam.rs"
   - "tests/payroll_golden_cases.rs"

@@ -8,6 +8,18 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Why a sink could not accept an event. Publish failures are surfaced to the caller (the post
+/// verb errors AFTER its row landed), because the remedy — re-run the post — is exactly the
+/// at-least-once delivery path: the already-posted branch re-publishes, and consumers dedup by
+/// record id. Swallowing the error here would silently lose the event instead.
+#[derive(Debug, thiserror::Error)]
+pub enum PayrollEventError {
+    #[error("db: {0}")]
+    Db(#[from] sqlx::Error),
+    #[error("{0}")]
+    Other(String),
+}
+
 /// One obligation the posted run created, owed to the account it credits. `statutory` routes it: true →
 /// remit to a statutory authority (BPJS, PPh 21); false → an ordinary deduction (loan, advance). This is
 /// the breakdown `backbone-payments` settles — without it the consumer would have to re-query payroll's
@@ -45,17 +57,23 @@ pub enum PayrollEvent {
     PayrollPosted(PayrollPosted),
 }
 
-/// Sink the write path publishes to. A consuming service supplies its own (bus, outbox, …).
+/// Sink the write path publishes to. A consuming service supplies its own (bus, durable outbox,
+/// …). Async + fallible so a composition adapter can stage the event durably (e.g. into a
+/// database outbox on its own connection) before acknowledging. Delivery is at-least-once:
+/// re-running the post verb re-publishes, and consumers dedup by record id.
+#[async_trait::async_trait]
 pub trait PayrollEventSink: Send + Sync {
-    fn publish(&self, event: &PayrollEvent);
+    async fn publish(&self, event: &PayrollEvent) -> Result<(), PayrollEventError>;
 }
 
 /// A no-op/logging sink for tests and single-process composition.
 #[derive(Debug, Default, Clone)]
 pub struct LoggingSink;
 
+#[async_trait::async_trait]
 impl PayrollEventSink for LoggingSink {
-    fn publish(&self, event: &PayrollEvent) {
+    async fn publish(&self, event: &PayrollEvent) -> Result<(), PayrollEventError> {
         tracing::info!(?event, "payroll event");
+        Ok(())
     }
 }

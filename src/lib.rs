@@ -39,6 +39,24 @@ pub use application::service::SalarySlipLineService;
 pub use application::service::SalaryStructureService;
 pub use application::service::SalaryComponentService;
 
+// <<< CUSTOM
+// The validated run verbs (lifecycle + computed slips + the write-service request/outcome types),
+// the fail-closed seams (GL post / remittance / domain events), the overtime + employee-statutory
+// input ports, the statutory calculators, and the guarded HTTP composition. Re-exported so a
+// host composes payroll without reaching into internal module paths.
+pub use application::service::{
+    bpjs_kesehatan, bpjs_ketenagakerjaan, compute_statutory, overtime_pay, pph21, pph21_ter, thr,
+    AccountingPostEnvelope, ComputedSlipRequest, EmployeeStatutory, EmployeeStatutoryInputs,
+    GlPostAck, GlPostLine, GlPostRejected, GlPostSink, LoggingSink, NewComponent, NewPayrollEntry,
+    NewSalarySlip, NewStructure, OvertimeInputs, PayrollError, PayrollEvent, PayrollEventError,
+    PayrollEventSink, PayrollPayable, PayrollPosted, PayrollWriteService, PoolEmployeeStatutoryInputs,
+    PoolOvertimeInputs, PostOutcome, Pph21Method, RemitAck, RemitOutcome, RemittanceInstruction,
+    RemittanceSeamError, RemittanceSink, StatutoryAccounts, StatutoryConfig, StatutoryError,
+    UnwiredGlSink, UnwiredRemittance,
+};
+pub use presentation::http::create_guarded_payroll_routes;
+// END CUSTOM
+
 use std::sync::Arc;
 use axum::Router;
 use sqlx::PgPool;
@@ -63,6 +81,9 @@ pub struct PayrollModule {
     pub(crate) salary_structure_service: Arc<SalaryStructureService>,
     pub(crate) salary_component_service: Arc<SalaryComponentService>,
     // <<< CUSTOM FIELDS
+    // The validated write path: run lifecycle, computed slips, the balanced salary journal, and
+    // the module-held fail-closed seams (GL / events / remittance default Unwired/Logging/Unwired).
+    pub(crate) payroll_write_service: Arc<PayrollWriteService>,
     // END CUSTOM
 }
 
@@ -77,18 +98,6 @@ impl PayrollModule {
     /// create invalid rows or soft-delete a referenced master out from under its
     /// dependents. Prefer a guarded composition (read + validated writes) for any
     /// real deployment; use this only in trusted/admin/seeding contexts.
-    ///
-    /// Exception: `CompensationChange` is mounted **read-only** here. It is an
-    /// append-only compensation ledger whose rows are written solely by the
-    /// lifecycle event handlers (promotion / offboarding / onboarding) with
-    /// `reference_id` idempotency — exposing generic create/update/delete over
-    /// HTTP would let callers rewrite or delete history and break that invariant.
-    /// HTTP access is therefore limited to the GET endpoints; writes go through
-    /// the event consumers (or `individual::compensation_change_routes`).
-    // NOTE: regen-safe? The mount swap below uses the codegen-provided
-    // `create_compensation_change_read_routes`. A future `metaphor schema` regen
-    // re-emits this fn with the full-CRUD mount — the durable fix lives in the
-    // metaphor-schema route template (append-only entity -> read-only default).
     pub fn all_crud_routes(&self) -> Router {
         use presentation::http::{
             create_compensation_change_read_routes,
@@ -113,10 +122,61 @@ impl PayrollModule {
     /// mount exposes unguarded writes. Compose a guarded router (read + validated
     /// writes) for production, or call `all_crud_routes()` to opt into the full
     /// unguarded surface explicitly.
-    #[deprecated(note = "mounts unvalidated generic CRUD on every entity; compose a guarded router for production, or call all_crud_routes() for the intentional full/unguarded surface")]
+    #[deprecated(note = "mounts unvalidated generic CRUD; prefer readonly_routes() + validated writes, or all_crud_routes() for the full/unguarded surface")]
     pub fn routes(&self) -> Router {
         self.all_crud_routes()
     }
+
+    /// Read-only routes for every entity (GET endpoints only) — the safe base.
+    ///
+    /// Generic mutation can't reach here, so this surface cannot bypass a
+    /// validated write service's invariants. Use this as the production base and
+    /// merge validated write routes (or a write service's HTTP layer) onto it.
+    pub fn readonly_routes(&self) -> Router {
+        use presentation::http::{
+            create_compensation_change_read_routes,
+            create_payroll_entry_read_routes,
+            create_salary_slip_read_routes,
+            create_salary_slip_line_read_routes,
+            create_salary_structure_read_routes,
+            create_salary_component_read_routes,
+        };
+
+        Router::new()
+            .merge(create_compensation_change_read_routes(self.compensation_change_service.clone()))
+            .merge(create_payroll_entry_read_routes(self.payroll_entry_service.clone()))
+            .merge(create_salary_slip_read_routes(self.salary_slip_service.clone()))
+            .merge(create_salary_slip_line_read_routes(self.salary_slip_line_service.clone()))
+            .merge(create_salary_structure_read_routes(self.salary_structure_service.clone()))
+            .merge(create_salary_component_read_routes(self.salary_component_service.clone()))
+    }
+
+    // <<< CUSTOM METHODS
+    /// The module-held validated write service (run verbs, computed slips, seams).
+    pub fn payroll_write_service(&self) -> Arc<PayrollWriteService> {
+        self.payroll_write_service.clone()
+    }
+
+    /// Replace the write service at the composition root — the way a host wires real adapters over
+    /// the fail-closed seams (e.g. staging domain events into an outbox) or swaps the pool-default
+    /// input ports for adapters over the attendance/employee exports. Consuming `self` keeps the
+    /// builder chain reading naturally:
+    ///
+    /// ```text
+    /// let payroll = PayrollModule::builder()
+    ///     .with_database(pool.clone())
+    ///     .build()?
+    ///     .with_payroll_write_service(Arc::new(
+    ///         PayrollWriteService::new(pool.clone()).with_event_sink(my_outbox_sink),
+    ///     ));
+    /// ```
+    ///
+    /// Call before mounting routes; the module is consumed once at startup.
+    pub fn with_payroll_write_service(mut self, svc: Arc<PayrollWriteService>) -> Self {
+        self.payroll_write_service = svc;
+        self
+    }
+    // END CUSTOM
 }
 
 /// Builder for PayrollModule
@@ -171,6 +231,10 @@ impl PayrollModuleBuilder {
         let salary_component_service = Arc::new(SalaryComponentService::with_repository(salary_component_repository.clone()));
 
         // <<< CUSTOM
+        // The validated write path over the same pool: pool-default input ports (works standalone),
+        // seams fail-closed (Unwired GL / Logging events / Unwired remittance) — a composition root
+        // swaps them via `with_payroll_write_service`.
+        let payroll_write_service = Arc::new(PayrollWriteService::new(db_pool.clone()));
         // END CUSTOM
 
         Ok(PayrollModule {
@@ -181,6 +245,7 @@ impl PayrollModuleBuilder {
             salary_structure_service,
             salary_component_service,
             // <<< CUSTOM
+            payroll_write_service,
             // END CUSTOM
         })
     }

@@ -19,7 +19,10 @@ path = "src/lib.rs"
 # -----------------------------------------------------------------------------
 backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0", features = ["postgres"] }
 backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
-backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
+# `axum` feature required for the CompanyContext extractor the guarded routes use; without it
+# the `company` module isn't exported and lib-only builds (clippy/check without dev-deps'
+# feature unification) fail to resolve the import.
+backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0", features = ["axum"] }
 backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.0" }
 # Transactional-outbox consumer (ADR-005): the `promotion.salary` + `offboarding.settlement` handlers
 # dedup via `inbox::once` in the same tx as the compensation_changes insert. Pinned to the same tags

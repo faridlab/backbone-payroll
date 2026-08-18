@@ -88,3 +88,18 @@ pub struct GlPostRejected {
 pub trait GlPostSink: Send + Sync {
     async fn post(&self, envelope: &AccountingPostEnvelope) -> Result<GlPostAck, GlPostRejected>;
 }
+
+/// Fail-closed default: no accounting composed → every post is refused with the stable
+/// `gl_seam_unwired` code. A run stays `processed` and retryable; nothing is silently un-posted.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct UnwiredGlSink;
+
+#[async_trait::async_trait]
+impl GlPostSink for UnwiredGlSink {
+    async fn post(&self, _envelope: &AccountingPostEnvelope) -> Result<GlPostAck, GlPostRejected> {
+        Err(GlPostRejected {
+            code: "gl_seam_unwired".into(),
+            message: "no GL post sink is composed into this deployment".into(),
+        })
+    }
+}

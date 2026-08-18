@@ -242,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-attendance"
-version = "0.1.4"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -280,6 +280,8 @@ dependencies = [
  "anyhow",
  "argon2",
  "async-trait",
+ "axum",
+ "backbone-orm 2.0.0 (git+https://github.com/faridlab/backbone-framework?tag=v2.7.0)",
  "chrono",
  "email_address",
  "jsonwebtoken",
@@ -408,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-employee"
-version = "0.1.4"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "async-trait",

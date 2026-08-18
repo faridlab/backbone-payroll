@@ -13,6 +13,9 @@ pub mod salary_structure_handler;
 pub mod salary_component_handler;
 
 // <<< CUSTOM
+// Guarded composition (user-owned file): validated run verbs + computed slips + safe reads, no
+// generic run/slip/slip-line mutation.
+pub mod guarded_routes;
 // END CUSTOM
 
 // Re-exports
@@ -23,4 +26,5 @@ pub use salary_slip_line_handler::{create_salary_slip_line_routes, create_salary
 pub use salary_structure_handler::{create_salary_structure_routes, create_salary_structure_read_routes, create_salary_structure_write_routes};
 pub use salary_component_handler::{create_salary_component_routes, create_salary_component_read_routes, create_salary_component_write_routes};
 // <<< CUSTOM
+pub use guarded_routes::create_guarded_payroll_routes;
 // END CUSTOM

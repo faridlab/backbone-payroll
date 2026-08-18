@@ -9,6 +9,7 @@
 //! 2dp, half-away-from-zero.
 
 use backbone_orm::company_scope;
+use chrono::{Datelike, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -16,11 +17,17 @@ use uuid::Uuid;
 use crate::infrastructure::persistence::{
     NewComponentRow, NewPayrollEntryRow, NewSalarySlipRow, NewSlipLineRow, NewStructureRow,
     PayrollEntryRepository, SalaryComponentRepository, SalarySlipLineRepository, SalarySlipRepository,
-    SalaryStructureRepository,
+    SalaryStructureRepository, StatutoryParamsRepository,
 };
 
+use super::employee_inputs_port::{EmployeeStatutoryInputs, PoolEmployeeStatutoryInputs};
+use super::overtime_port::{OvertimeInputs, PoolOvertimeInputs};
 use super::payroll_events::*;
 use super::payroll_gl::*;
+use super::payroll_remittance::{
+    RemitAck, RemittanceInstruction, RemittanceSeamError, RemittanceSink, UnwiredRemittance,
+};
+use super::statutory_calcs::{self, Pph21Method, PtkpTier};
 
 fn money(v: Decimal) -> Decimal {
     v.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
@@ -40,6 +47,61 @@ pub enum PayrollError {
     Unbalanced,
     #[error("gl rejected: {0}")]
     GlRejected(String),
+    /// The post/remit row landed but the event sink refused the event — re-run the post verb; the
+    /// already-posted branch re-publishes (at-least-once), and consumers dedup by record id.
+    #[error("event publish failed after the post landed — re-run the post verb to re-publish: {0}")]
+    EventPublish(String),
+    #[error(transparent)]
+    Remittance(#[from] RemittanceSeamError),
+    /// The statutory parameter resolution refused to compute (no effective rows for the period,
+    /// an incomplete component set, …). Fail-closed by design: never a silent zero tax/pay.
+    #[error(transparent)]
+    Statutory(#[from] statutory_calcs::StatutoryError),
+}
+
+impl PayrollError {
+    /// Stable machine code the HTTP layer surfaces.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Db(_) => "internal_error",
+            Self::NotFound(_) => "not_found",
+            Self::InvalidState(_) => "invalid_state",
+            Self::Invalid(_) => "invalid_input",
+            Self::Unbalanced => "unbalanced",
+            Self::GlRejected(code) => match code.as_str() {
+                "gl_seam_unwired" => "gl_seam_unwired",
+                _ => "gl_rejected",
+            },
+            Self::EventPublish(_) => "event_publish_failed",
+            Self::Remittance(seam) => match seam.code() {
+                "remittance_seam_unwired" => "remittance_seam_unwired",
+                "remittance_rejected" => "remittance_rejected",
+                _ => "remittance_seam_error",
+            },
+            Self::Statutory(e) => match e {
+                statutory_calcs::StatutoryError::NoParamsForPeriod(..) => {
+                    "no_statutory_params_for_period"
+                }
+                _ => "statutory_calc_error",
+            },
+        }
+    }
+
+    /// The HTTP status the guarded surface maps this error to. Client-shaped failures (bad input,
+    /// wrong state, unwired seams the operator must compose, missing effective parameters) are
+    /// 4xx/422 so the caller can distinguish them from infrastructure faults.
+    pub fn http_status(&self) -> u16 {
+        match self {
+            Self::Db(_) | Self::EventPublish(_) => 500,
+            Self::NotFound(_) => 404,
+            Self::InvalidState(_) | Self::Invalid(_) | Self::Unbalanced => 422,
+            Self::GlRejected(_) | Self::Remittance(_) => 422,
+            Self::Statutory(e) => match e {
+                statutory_calcs::StatutoryError::NoParamsForPeriod(..) => 422,
+                _ => 500,
+            },
+        }
+    }
 }
 
 pub struct NewComponent {
@@ -85,6 +147,13 @@ pub struct NewSalarySlip {
     /// Unpaid-leave + uncovered-absence days from `hr.period_summary` — reduce gross.
     pub unpaid_days: Decimal,
     pub statutory: Vec<StatutoryLine>,
+    /// Overtime hours consumed while building this slip (0 when none) — stamped on the row as the
+    /// audit snapshot. The PAY for these hours is an ordinary earning line the caller supplies in
+    /// `statutory`/structure lines; the number here only records what the calculation used.
+    pub overtime_hours: Decimal,
+    /// The PPh-21 path dispatched for this slip (`npwp_brackets` | `ter_a` | `ter_b` | `ter_c`),
+    /// stamped on the row for audit. None when no statutory tax path was computed.
+    pub tax_method: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -96,6 +165,38 @@ pub struct PostOutcome {
     pub already: bool,
 }
 
+/// What the remit verb sent — one (instruction, ack) pair per deduction payable, in send order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemitOutcome {
+    pub payroll_entry_id: Uuid,
+    pub remitted: Vec<(RemittanceInstruction, RemitAck)>,
+}
+
+/// The GL payable accounts the computed-slip orchestrator books statutory deductions against —
+/// supplied by the caller until the accounting composition resolves them itself (same stopgap
+/// posture as a caller-supplied posting account set).
+#[derive(Debug, Clone, Copy)]
+pub struct StatutoryAccounts {
+    pub pph21_payable: Uuid,
+    pub bpjs_kesehatan_payable: Uuid,
+    pub bpjs_ketenagakerjaan_payable: Uuid,
+}
+
+/// One computed slip: the orchestrator reads the run + the employee's statutory facts + the
+/// effective parameter set, computes the statutory components and overtime pay, and delegates
+/// the row writes to [`PayrollWriteService::add_salary_slip`].
+pub struct ComputedSlipRequest {
+    pub run_id: Uuid,
+    pub employee_id: Uuid,
+    pub structure_id: Uuid,
+    pub working_days: Decimal,
+    pub unpaid_days: Decimal,
+    /// BPJS JKK risk class 1..=5 — caller-supplied until the HR master carries the field.
+    pub risk_class: i32,
+    /// Payable accounts for the statutory deductions (see [`StatutoryAccounts`]).
+    pub accounts: StatutoryAccounts,
+}
+
 pub struct PayrollWriteService {
     pool: PgPool,
     structures: SalaryStructureRepository,
@@ -103,6 +204,12 @@ pub struct PayrollWriteService {
     entries: PayrollEntryRepository,
     slips: SalarySlipRepository,
     slip_lines: SalarySlipLineRepository,
+    params: StatutoryParamsRepository,
+    overtime_inputs: Box<dyn OvertimeInputs>,
+    employee_inputs: Box<dyn EmployeeStatutoryInputs>,
+    gl_sink: std::sync::Arc<dyn GlPostSink>,
+    event_sink: std::sync::Arc<dyn PayrollEventSink>,
+    remit_sink: std::sync::Arc<dyn RemittanceSink>,
 }
 
 impl PayrollWriteService {
@@ -112,7 +219,76 @@ impl PayrollWriteService {
         let entries = PayrollEntryRepository::new(pool.clone());
         let slips = SalarySlipRepository::new(pool.clone());
         let slip_lines = SalarySlipLineRepository::new(pool.clone());
-        Self { pool, structures, components, entries, slips, slip_lines }
+        let params = StatutoryParamsRepository::new(pool.clone());
+        // Pool defaults so payroll computes standalone; a host composing the attendance or
+        // employee modules overrides with an adapter over their exports (one SQL owner each).
+        let overtime_inputs: Box<dyn OvertimeInputs> = Box::new(PoolOvertimeInputs::new(pool.clone()));
+        let employee_inputs: Box<dyn EmployeeStatutoryInputs> =
+            Box::new(PoolEmployeeStatutoryInputs::new(pool.clone()));
+        Self {
+            pool,
+            structures,
+            components,
+            entries,
+            slips,
+            slip_lines,
+            params,
+            overtime_inputs,
+            employee_inputs,
+            // Module-held seams, fail-closed by default: an unwired deployment's post/remit verbs
+            // refuse with the stable seam codes instead of pretending the effect happened.
+            gl_sink: std::sync::Arc::new(UnwiredGlSink),
+            event_sink: std::sync::Arc::new(LoggingSink),
+            remit_sink: std::sync::Arc::new(UnwiredRemittance),
+        }
+    }
+
+    /// Override where overtime hours come from (default: the pool read mirroring attendance's
+    /// export).
+    pub fn with_overtime_inputs(mut self, inputs: Box<dyn OvertimeInputs>) -> Self {
+        self.overtime_inputs = inputs;
+        self
+    }
+
+    /// Override where employee statutory facts come from (default: the pool read mirroring the
+    /// employee module's export).
+    pub fn with_employee_inputs(mut self, inputs: Box<dyn EmployeeStatutoryInputs>) -> Self {
+        self.employee_inputs = inputs;
+        self
+    }
+
+    /// Override the GL-posting seam (default [`UnwiredGlSink`] — post refuses with
+    /// `gl_seam_unwired`).
+    pub fn with_gl_sink(mut self, sink: std::sync::Arc<dyn GlPostSink>) -> Self {
+        self.gl_sink = sink;
+        self
+    }
+
+    /// Override the domain-event sink (default [`LoggingSink`]). A durable composition stages into
+    /// an outbox here.
+    pub fn with_event_sink(mut self, sink: std::sync::Arc<dyn PayrollEventSink>) -> Self {
+        self.event_sink = sink;
+        self
+    }
+
+    /// Override the remittance seam (default [`UnwiredRemittance`] — remit refuses with
+    /// `remittance_seam_unwired`).
+    pub fn with_remit_sink(mut self, sink: std::sync::Arc<dyn RemittanceSink>) -> Self {
+        self.remit_sink = sink;
+        self
+    }
+
+    /// Post through the module-held GL + event seams — the composition-root convenience over
+    /// [`Self::post_payroll_entry`] (which stays public for callers supplying their own sinks,
+    /// e.g. tests driving a real accounting adapter).
+    pub async fn post_run(&self, run_id: Uuid, posting_date: NaiveDate) -> Result<PostOutcome, PayrollError> {
+        self.post_payroll_entry(run_id, posting_date, &*self.gl_sink, &*self.event_sink).await
+    }
+
+    /// Remit through the module-held remittance seam — the composition-root convenience over
+    /// [`Self::remit_payroll_entry`].
+    pub async fn remit_run(&self, run_id: Uuid) -> Result<RemitOutcome, PayrollError> {
+        self.remit_payroll_entry(run_id, &*self.remit_sink).await
     }
 
     /// Define a salary structure with its earning/deduction components.
@@ -199,10 +375,6 @@ impl PayrollWriteService {
         // LOWER clamp a negative unpaid_days (a bad upstream hr.period_summary value) drives factor > 1
         // and inflates gross ABOVE the structure — a balanced-but-over-booked salary journal (maturity
         // council 2026-07-08). The DB CHECKs in 20260708000100_payroll_balance_guards backstop any writer.
-        // Clamp unpaid days to [0, working_days] so the proration factor stays in [0, 1]. Without the
-        // LOWER clamp a negative unpaid_days (a bad upstream hr.period_summary value) drives factor > 1
-        // and inflates gross ABOVE the structure — a balanced-but-over-booked salary journal (maturity
-        // council 2026-07-08). The DB CHECKs in 20260708000100_payroll_balance_guards backstop any writer.
         let unpaid = s.unpaid_days.clamp(Decimal::ZERO, s.working_days);
         let factor = (s.working_days - unpaid) / s.working_days; // proration for unpaid days
 
@@ -274,6 +446,8 @@ impl PayrollWriteService {
             gross_pay: gross,
             total_deductions: deductions,
             net_pay: net,
+            overtime_hours: Some(s.overtime_hours.round_dp(2)),
+            tax_method: s.tax_method.clone(),
         }).await;
         if let Err(err) = ins {
             return Err(if err.as_database_error().map(|d| d.is_unique_violation()).unwrap_or(false) {
@@ -294,6 +468,142 @@ impl PayrollWriteService {
         }
         tx.commit().await?;
         Ok(slip_id)
+    }
+
+    /// Build one employee's slip end-to-end: period → effective statutory params → employee facts →
+    /// TER/bracket dispatch → overtime pay → the same [`Self::add_salary_slip`] write path a manual
+    /// caller uses. The statutory base is the structure's un-prorated monthly earning total (the
+    /// salary being paid); overtime pay rides in as an ordinary earning line so gross stays balanced
+    /// through the existing journal.
+    pub async fn add_computed_salary_slip(&self, r: ComputedSlipRequest) -> Result<Uuid, PayrollError> {
+        let risk_class = u8::try_from(r.risk_class)
+            .ok()
+            .filter(|rc| (1..=5).contains(rc))
+            .ok_or_else(|| PayrollError::Invalid("risk_class must be 1..=5".into()))?;
+        // ID-only read under the request scope (same fence posture as add_salary_slip).
+        let run = self.entries.find_period_by_id(&self.pool, r.run_id).await?
+            .ok_or(PayrollError::NotFound("payroll run"))?;
+        if run.status != "draft" {
+            return Err(PayrollError::InvalidState("run is not draft"));
+        }
+        let company_id = run.company_id;
+        let month = u32::try_from(run.period_month)
+            .map_err(|_| PayrollError::Invalid("period_month is not a valid month".into()))?;
+        let period_start = NaiveDate::from_ymd_opt(run.period_year, month, 1)
+            .ok_or(PayrollError::Invalid("run period is not a real calendar month".into()))?;
+        // Period end = day before the next month's first (year-rollover safe).
+        let (ny, nm) = if month == 12 { (run.period_year + 1, 1) } else { (run.period_year, month + 1) };
+        let period_end = NaiveDate::from_ymd_opt(ny, nm, 1)
+            .and_then(|d| d.pred_opt())
+            .ok_or(PayrollError::Invalid("run period end is not a real calendar date".into()))?;
+
+        // Fail-closed parameter resolution: the effective set as of the period's first day. A period
+        // before any seed date (or a table an operator emptied) refuses rather than zeroing tax.
+        let cfg = self.params.resolve_as_of("ID", period_start).await?;
+
+        // Employee facts (PTKP/NPWP/TER/tenure anchor) — None means no such live employee in scope.
+        let inputs = self
+            .employee_inputs
+            .statutory_inputs(company_id, r.employee_id)
+            .await?
+            .ok_or(PayrollError::NotFound("employee statutory inputs"))?;
+
+        // Statutory base: the structure's monthly earning total (un-prorated — the salary being
+        // paid; proration is a slip-line concern the earnings factor already applies).
+        let comps = company_scope::with_company_scope(
+            Some(company_id),
+            self.components.list_by_structure(&self.pool, r.structure_id),
+        )
+        .await?;
+        let gross_monthly: Decimal = comps
+            .iter()
+            .filter(|c| c.component_type == "earning")
+            .map(|c| c.amount)
+            .sum();
+        if gross_monthly <= Decimal::ZERO {
+            return Err(PayrollError::Invalid("salary structure has no earning components".into()));
+        }
+
+        // Overtime hours over the period, priced on the same monthly base (statutory 173 divisor),
+        // landing as an ordinary earning line so it flows through the balanced journal.
+        let overtime_hours = self
+            .overtime_inputs
+            .overtime_hours(company_id, r.employee_id, period_start, period_end)
+            .await?;
+        let salary_expense = run.salary_expense_account_id
+            .ok_or(PayrollError::Invalid("run has no salary expense account".into()))?;
+        let mut statutory: Vec<StatutoryLine> = Vec::new();
+        if overtime_hours > Decimal::ZERO {
+            let pay = statutory_calcs::overtime_pay(overtime_hours, gross_monthly, &cfg.overtime)?;
+            statutory.push(StatutoryLine {
+                name: "Lembur/Overtime".into(),
+                component_type: "earning".into(),
+                amount: pay,
+                gl_account_id: salary_expense,
+            });
+        }
+
+        // Dispatch: the employee's TER category when set, else the progressive-bracket path.
+        let ptkp: PtkpTier = inputs
+            .ptkp
+            .parse()
+            .map_err(|_| PayrollError::Invalid(format!("unknown ptkp tier '{}'", inputs.ptkp)))?;
+        let method = match inputs.ter_category.as_deref() {
+            None => Pph21Method::NpwpBrackets,
+            Some(s) => Pph21Method::Ter(
+                s.parse()
+                    .map_err(|_| PayrollError::Invalid(format!("unknown ter category '{s}'")))?,
+            ),
+        };
+        // THR tenure: whole months from join to the pay period; unknown join date → 0 (no THR).
+        let tenure_months = Decimal::from(
+            inputs
+                .join_date
+                .map(|j| (run.period_year - j.year()) * 12 + (month as i32 - j.month() as i32))
+                .unwrap_or(0),
+        );
+
+        let components = statutory_calcs::compute_statutory(
+            method,
+            ptkp,
+            inputs.has_npwp,
+            gross_monthly,
+            risk_class,
+            tenure_months,
+            &cfg,
+        )?;
+        for c in components {
+            let gl = if c.component_type == "earning" {
+                salary_expense // THR earning — the journal debits salary expense for the whole gross
+            } else {
+                match c.name.as_str() {
+                    "PPh 21" => r.accounts.pph21_payable,
+                    "BPJS Kesehatan" => r.accounts.bpjs_kesehatan_payable,
+                    "BPJS Ketenagakerjaan" => r.accounts.bpjs_ketenagakerjaan_payable,
+                    other => return Err(PayrollError::Invalid(format!("unroutable statutory component '{other}'"))),
+                }
+            };
+            statutory.push(StatutoryLine {
+                name: c.name,
+                component_type: c.component_type,
+                amount: c.amount,
+                gl_account_id: gl,
+            });
+        }
+
+        self.add_salary_slip(
+            r.run_id,
+            NewSalarySlip {
+                employee_id: r.employee_id,
+                structure_id: r.structure_id,
+                working_days: r.working_days,
+                unpaid_days: r.unpaid_days,
+                statutory,
+                overtime_hours,
+                tax_method: Some(method.label().to_string()),
+            },
+        )
+        .await
     }
 
     /// Roll the run's slips up into its totals and move `draft → processed` (ready to post).
@@ -334,6 +644,25 @@ impl PayrollWriteService {
         if status == "posted" {
             let j: Uuid = run.journal_id.ok_or(PayrollError::InvalidState("posted without a journal"))?;
             let p: Uuid = run.accounting_post_id.unwrap_or(j);
+            // At-least-once delivery: a retried post re-publishes (the first attempt surfaced a
+            // publish failure as an error even though its row landed). Consumers dedup by record
+            // id, so a re-stage after a partial delivery is absorbed, never duplicated downstream.
+            let payables = self.payables_for_run(run_id, run.company_id).await?;
+            events
+                .publish(&PayrollEvent::PayrollPosted(PayrollPosted {
+                    payroll_entry_id: run_id,
+                    company_id: run.company_id,
+                    journal_id: j,
+                    post_id: p,
+                    total_gross: run.total_gross,
+                    total_deductions: run.total_deductions,
+                    total_net,
+                    salary_payable_account_id: run.salary_payable_account_id
+                        .ok_or(PayrollError::InvalidState("posted without a salary payable account"))?,
+                    payables,
+                }))
+                .await
+                .map_err(|e| PayrollError::EventPublish(e.to_string()))?;
             return Ok(PostOutcome { payroll_entry_id: run_id, journal_id: j, post_id: p, total_net, already: true });
         }
         if status != "processed" {
@@ -383,7 +712,11 @@ impl PayrollWriteService {
         let ack = sink.post(&env).await.map_err(|r| PayrollError::GlRejected(r.code))?;
 
         let posted_at = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
-            posting_date.and_hms_opt(0, 0, 0).unwrap(), chrono::Utc);
+            posting_date
+                .and_hms_opt(0, 0, 0)
+                .ok_or(PayrollError::Invalid("posting date is not a real calendar date".into()))?,
+            chrono::Utc,
+        );
         let moved = company_scope::with_company_scope(
             Some(company_id),
             self.entries.mark_posted(&self.pool, run_id, posted_at, ack.journal_id, ack.post_id),
@@ -398,11 +731,56 @@ impl PayrollWriteService {
             .await?;
             return Ok(PostOutcome { payroll_entry_id: run_id, journal_id: j, post_id: ack.post_id, total_net, already: true });
         }
-        events.publish(&PayrollEvent::PayrollPosted(PayrollPosted {
-            payroll_entry_id: run_id, company_id, journal_id: ack.journal_id, post_id: ack.post_id,
-            total_gross, total_deductions, total_net,
-            salary_payable_account_id: salary_payable, payables,
-        }));
+        events
+            .publish(&PayrollEvent::PayrollPosted(PayrollPosted {
+                payroll_entry_id: run_id, company_id, journal_id: ack.journal_id, post_id: ack.post_id,
+                total_gross, total_deductions, total_net,
+                salary_payable_account_id: salary_payable, payables,
+            }))
+            .await
+            .map_err(|e| PayrollError::EventPublish(e.to_string()))?;
         Ok(PostOutcome { payroll_entry_id: run_id, journal_id: ack.journal_id, post_id: ack.post_id, total_net, already: false })
+    }
+
+    /// The run's deduction payables, grouped by account exactly as the post verb grouped them —
+    /// the shared source for the already-posted re-publish and the remit verb, so both describe
+    /// the SAME obligations the posted journal credited.
+    async fn payables_for_run(&self, run_id: Uuid, company_id: Uuid) -> Result<Vec<PayrollPayable>, PayrollError> {
+        let ded_rows = company_scope::with_company_scope(
+            Some(company_id),
+            self.slip_lines.group_deductions_by_account(&self.pool, run_id),
+        )
+        .await?;
+        Ok(ded_rows
+            .into_iter()
+            .filter(|r| r.amount > Decimal::ZERO)
+            .map(|r| PayrollPayable { gl_account_id: r.gl_account_id, amount: r.amount, statutory: r.statutory })
+            .collect())
+    }
+
+    /// Remit a posted run's payables — one instruction per deduction account, each carrying the
+    /// stable `payroll_remittance:{company}:{run}:{account}` idempotency key so retries dedup at
+    /// the sink. Requires `posted` (an unposted run has no settled obligations to pay). Payee
+    /// resolution is the composing host's adapter, never payroll's.
+    pub async fn remit_payroll_entry(
+        &self,
+        run_id: Uuid,
+        sink: &dyn RemittanceSink,
+    ) -> Result<RemitOutcome, PayrollError> {
+        // RLS scope (ADR-0008), ID-only pattern — see post_payroll_entry.
+        let run = self.entries.find_for_posting(&self.pool, run_id).await?
+            .ok_or(PayrollError::NotFound("payroll run"))?;
+        if run.status.as_str() != "posted" {
+            return Err(PayrollError::InvalidState("run is not posted"));
+        }
+        let payables = self.payables_for_run(run_id, run.company_id).await?;
+        let mut remitted = Vec::with_capacity(payables.len());
+        for p in payables {
+            let instruction =
+                RemittanceInstruction::new(run.company_id, run_id, p.gl_account_id, p.amount, p.statutory);
+            let ack: RemitAck = sink.remit(&instruction).await?;
+            remitted.push((instruction, ack));
+        }
+        Ok(RemitOutcome { payroll_entry_id: run_id, remitted })
     }
 }
