@@ -101,10 +101,20 @@ impl StatutoryParamsRepository {
         .bind(effective)
         .fetch_all(&self.pool)
         .await?;
-        Ok(rows
+        let brackets: Vec<Pph21Bracket> = rows
             .into_iter()
             .map(|(_, lower, upper, rate)| Pph21Bracket { lower_bound: lower, upper_bound: upper, rate })
-            .collect())
+            .collect();
+        // A complete bracket set opens at income zero and closes open-ended: the progressive-tax
+        // walk silently zero-taxes everything below a set that starts above zero, so a lone
+        // correction row (an incomplete set) must refuse here rather than compute.
+        if brackets.is_empty()
+            || brackets.first().map(|b| b.lower_bound) != Some(Decimal::ZERO)
+            || brackets.last().and_then(|b| b.upper_bound).is_some()
+        {
+            return Err(no_params(country_code, as_of));
+        }
+        Ok(brackets)
     }
 
     async fn ptkp_as_of(
@@ -125,7 +135,15 @@ impl StatutoryParamsRepository {
         .bind(effective)
         .fetch_all(&self.pool)
         .await?;
-        Ok(rows.into_iter().collect())
+        let ptkp_map: HashMap<String, Decimal> = rows.into_iter().collect();
+        // The tier axis is closed (eight tiers); a set missing any of them is an incomplete
+        // correction — the employee lookup would 500 on the first affected worker otherwise.
+        for tier in ["tk0", "tk1", "tk2", "tk3", "k0", "k1", "k2", "k3"] {
+            if !ptkp_map.contains_key(tier) {
+                return Err(no_params(country_code, as_of));
+            }
+        }
+        Ok(ptkp_map)
     }
 
     async fn ter_as_of(
@@ -150,6 +168,16 @@ impl StatutoryParamsRepository {
         let mut map: HashMap<String, Vec<TerRateBand>> = HashMap::new();
         for (category, _, lower, rate) in rows {
             map.entry(category).or_default().push(TerRateBand { lower_bound: lower, rate });
+        }
+        // A complete TER set carries every category, each opening at base zero — a lone category
+        // or a band list that starts above zero is an incomplete correction and must refuse.
+        for category in ["ter_a", "ter_b", "ter_c"] {
+            match map.get(category) {
+                Some(bands)
+                    if !bands.is_empty() && bands.first().map(|b| b.lower_bound) == Some(Decimal::ZERO) =>
+                {}
+                _ => return Err(no_params(country_code, as_of)),
+            }
         }
         Ok(map)
     }

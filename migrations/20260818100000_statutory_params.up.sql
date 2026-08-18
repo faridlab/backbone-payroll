@@ -7,8 +7,12 @@
 -- The seeded values are a STARTER SET aligned with the current-law defaults that shipped in
 -- config/application.yml; the TER bands are a reduced, coarse-grained representation of the
 -- regulation's published table. They are NOT yet reviewed statutory data: when a domain
--- reviewer signs off (or the law changes), the correction is a new effective_from row — never
--- an edit to these rows and never a code change.
+-- reviewer signs off (or the law changes), the correction is a NEW COMPLETE effective-dated SET
+-- for the affected table — every row restated at the new effective_from, the unchanged rows
+-- copied verbatim — never a lone row, never an edit to live rows, and never a code change. The
+-- as-of loader resolves each table to the whole row set at the greatest effective_from <= the
+-- period and refuses the period when that set is incomplete, so a lone correction row reads as
+-- a broken set (a refused run) rather than as new law.
 --
 -- PPh-21 progressive brackets + PTKP (UU HPP, effective 2022-01-01).
 CREATE TABLE payroll.pph21_brackets (
@@ -137,12 +141,11 @@ INSERT INTO payroll.pph21_ter_rates (country_code, effective_from, category, seq
   ('ID','2024-01-01','ter_c',11,  33700000, 0.280000),
   ('ID','2024-01-01','ter_c',12,  45500000, 0.320000);
 
--- BPJS component rates. Every effective_from carries the COMPLETE component matrix: the resolver
--- loads the whole set in force at a period (the greatest effective_from <= it), so a change to one
--- component is a new effective-dated set restating the others unchanged — never a lone row, which
--- would read as an incomplete set and refuse the period. Kesehatan's 12M cap has been in force
--- since 2016; the 2024 set records the JP wage-ceiling adjustment. The pre-2024 JP cap is the
--- unreviewed starter value — the statutory reviewer corrects it with a new effective set.
+-- BPJS component rates: one complete 12-row matrix. Every effective_from must carry the COMPLETE
+-- matrix (the resolver loads the whole set in force at a period — the greatest effective_from <=
+-- it — and refuses on any missing component, side, or cap), so a change to one component is a new
+-- effective-dated set restating the others unchanged. The JP wage cap is the unreviewed starter
+-- value — the statutory reviewer corrects it with a new complete effective set.
 INSERT INTO payroll.bpjs_params (country_code, effective_from, component, side, rate, wage_cap) VALUES
   ('ID','2022-01-01','kes',   'employee', 0.010000, 12000000),
   ('ID','2022-01-01','kes',   'employer', 0.040000, 12000000),
@@ -155,22 +158,10 @@ INSERT INTO payroll.bpjs_params (country_code, effective_from, component, side, 
   ('ID','2022-01-01','jkk_3', 'employer', 0.008900, NULL),
   ('ID','2022-01-01','jkk_4', 'employer', 0.012700, NULL),
   ('ID','2022-01-01','jkk_5', 'employer', 0.017400, NULL),
-  ('ID','2022-01-01','jkm',   'employer', 0.003000, NULL),
-  ('ID','2024-01-01','kes',   'employee', 0.010000, 12000000),
-  ('ID','2024-01-01','kes',   'employer', 0.040000, 12000000),
-  ('ID','2024-01-01','jht',   'employee', 0.020000, NULL),
-  ('ID','2024-01-01','jht',   'employer', 0.037000, NULL),
-  ('ID','2024-01-01','jp',    'employee', 0.010000, 10547400),
-  ('ID','2024-01-01','jp',    'employer', 0.020000, 10547400),
-  ('ID','2024-01-01','jkk_1', 'employer', 0.002400, NULL),
-  ('ID','2024-01-01','jkk_2', 'employer', 0.005400, NULL),
-  ('ID','2024-01-01','jkk_3', 'employer', 0.008900, NULL),
-  ('ID','2024-01-01','jkk_4', 'employer', 0.012700, NULL),
-  ('ID','2024-01-01','jkk_5', 'employer', 0.017400, NULL),
-  ('ID','2024-01-01','jkm',   'employer', 0.003000, NULL);
+  ('ID','2022-01-01','jkm',   'employer', 0.003000, NULL);
 
--- Overtime: workday first hour 1.5x, subsequent hours 2x; rest-day bands seeded but not yet
--- dispatched by the slip builder.
+-- Overtime: workday first hour 1.5x, subsequent hours 2x — per DAY's stretch (the first-hour
+-- premium resets daily); rest-day bands seeded but not yet dispatched by the slip builder.
 INSERT INTO payroll.overtime_params (country_code, effective_from, day_kind, hour_from, hour_to, multiplier) VALUES
   ('ID','2022-01-01','workday',  1, 1, 1.50),
   ('ID','2022-01-01','workday',  2, NULL, 2.00),

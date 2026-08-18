@@ -82,6 +82,11 @@ impl PayrollError {
                 statutory_calcs::StatutoryError::NoParamsForPeriod(..) => {
                     "no_statutory_params_for_period"
                 }
+                statutory_calcs::StatutoryError::UnknownPtkpTier(_) => "unknown_ptkp_tier",
+                statutory_calcs::StatutoryError::UnknownRiskClass(_) => "unknown_risk_class",
+                statutory_calcs::StatutoryError::UnknownTerCategory(_) => "unknown_ter_category",
+                statutory_calcs::StatutoryError::NoTerRates(_) => "no_ter_rates",
+                statutory_calcs::StatutoryError::MissingOvertimeBands => "no_overtime_bands",
                 _ => "statutory_calc_error",
             },
         }
@@ -97,7 +102,15 @@ impl PayrollError {
             Self::InvalidState(_) | Self::Invalid(_) | Self::Unbalanced => 422,
             Self::GlRejected(_) | Self::Remittance(_) => 422,
             Self::Statutory(e) => match e {
+                // Data-presence failures (an incomplete or non-covering effective set, an axis
+                // value the set has no row for) are client-shaped: the operator seeds the missing
+                // effective set; only parse/IO/db faults are infrastructure.
                 statutory_calcs::StatutoryError::NoParamsForPeriod(..) => 422,
+                statutory_calcs::StatutoryError::UnknownPtkpTier(_) => 422,
+                statutory_calcs::StatutoryError::UnknownRiskClass(_) => 422,
+                statutory_calcs::StatutoryError::UnknownTerCategory(_) => 422,
+                statutory_calcs::StatutoryError::NoTerRates(_) => 422,
+                statutory_calcs::StatutoryError::MissingOvertimeBands => 422,
                 _ => 500,
             },
         }
@@ -524,17 +537,22 @@ impl PayrollWriteService {
             return Err(PayrollError::Invalid("salary structure has no earning components".into()));
         }
 
-        // Overtime hours over the period, priced on the same monthly base (statutory 173 divisor),
-        // landing as an ordinary earning line so it flows through the balanced journal.
-        let overtime_hours = self
+        // Overtime stretches over the period, each DAY priced on the same monthly base (statutory
+        // 173 divisor) — the 1.5× first hour resets daily, so the days are priced separately and
+        // summed — landing as an ordinary earning line so it flows through the balanced journal.
+        let stretches = self
             .overtime_inputs
-            .overtime_hours(company_id, r.employee_id, period_start, period_end)
+            .overtime_stretches(company_id, r.employee_id, period_start, period_end)
             .await?;
+        let overtime_hours: Decimal = stretches.iter().map(|(_, h)| *h).sum();
         let salary_expense = run.salary_expense_account_id
             .ok_or(PayrollError::Invalid("run has no salary expense account".into()))?;
         let mut statutory: Vec<StatutoryLine> = Vec::new();
         if overtime_hours > Decimal::ZERO {
-            let pay = statutory_calcs::overtime_pay(overtime_hours, gross_monthly, &cfg.overtime)?;
+            let mut pay = Decimal::ZERO;
+            for (_, day_hours) in &stretches {
+                pay += statutory_calcs::overtime_pay(*day_hours, gross_monthly, &cfg.overtime)?;
+            }
             statutory.push(StatutoryLine {
                 name: "Lembur/Overtime".into(),
                 component_type: "earning".into(),

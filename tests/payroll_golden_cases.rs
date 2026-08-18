@@ -221,17 +221,26 @@ async fn pgc5_payroll_posted_carries_payable_breakdown() {
     assert_eq!(sum, posted.total_deductions, "payables reconcile total_deductions");
 }
 
-/// Seed one complete, internally-consistent parameter set for `cc` at `effective` — the smallest
-/// set the resolver accepts (one bracket, one PTKP tier, one TER band, the full BPJS component
-/// matrix, two workday overtime bands). A per-test fictional country code isolates the rows from
-/// the seeded "ID" data and from parallel tests.
+/// Seed one complete, internally-consistent parameter set for `cc` at `effective` — complete in
+/// the resolver's sense: brackets opening at zero and closing open-ended, ALL eight PTKP tiers,
+/// ALL three TER categories each opening at zero, the BPJS matrix the calcs read, two workday
+/// overtime bands. A per-test fictional country code isolates the rows from the seeded "ID" data
+/// and from parallel tests.
 async fn seed_params(pool: &sqlx::PgPool, cc: &str, effective: NaiveDate) {
     sqlx::query("INSERT INTO payroll.pph21_brackets (country_code, effective_from, seq, lower_bound, upper_bound, rate) VALUES ($1,$2,1,0,NULL,0.05)")
         .bind(cc).bind(effective).execute(pool).await.unwrap();
-    sqlx::query("INSERT INTO payroll.pph21_ptkp (country_code, effective_from, tier, annual_amount) VALUES ($1,$2,'tk0',54000000)")
-        .bind(cc).bind(effective).execute(pool).await.unwrap();
-    sqlx::query("INSERT INTO payroll.pph21_ter_rates (country_code, effective_from, category, seq, lower_bound, rate) VALUES ($1,$2,'ter_a',1,0,0.01)")
-        .bind(cc).bind(effective).execute(pool).await.unwrap();
+    for (tier, amount) in [
+        ("tk0", "54000000"), ("tk1", "58500000"), ("tk2", "63000000"), ("tk3", "67500000"),
+        ("k0", "58500000"), ("k1", "63000000"), ("k2", "67500000"), ("k3", "72000000"),
+    ] {
+        sqlx::query("INSERT INTO payroll.pph21_ptkp (country_code, effective_from, tier, annual_amount) VALUES ($1,$2,$3,$4)")
+            .bind(cc).bind(effective).bind(tier).bind(amount.parse::<Decimal>().unwrap())
+            .execute(pool).await.unwrap();
+    }
+    for category in ["ter_a", "ter_b", "ter_c"] {
+        sqlx::query("INSERT INTO payroll.pph21_ter_rates (country_code, effective_from, category, seq, lower_bound, rate) VALUES ($1,$2,$3,1,0,0.01)")
+            .bind(cc).bind(effective).bind(category).execute(pool).await.unwrap();
+    }
     for (component, side, rate, cap) in [
         ("kes", "employee", dec("0.01"), Some(dec("12000000"))),
         ("kes", "employer", dec("0.04"), Some(dec("12000000"))),
@@ -334,4 +343,49 @@ async fn pgc7_pre_effective_period_run_refuses_to_compute() {
         }
         Ok(_) => panic!("a pre-effective period must refuse to compute a slip"),
     }
+}
+
+// PGC-8 — a LONE correction row refuses the period instead of applying: the correction protocol
+// restates the COMPLETE set at a new effective date, so seeding only the changed row leaves the
+// set at that date incomplete. The dangerous alternative — a lone top bracket silently zero-taxing
+// everyone below it via the progressive walk's break — is exactly what the completeness checks
+// turn back into the fail-closed refusal.
+#[tokio::test]
+async fn pgc8_lone_correction_rows_refuse_the_period() {
+    let pool = pool().await;
+    let repo = StatutoryParamsRepository::new(pool.clone());
+    let d = |y, m, d| NaiveDate::from_ymd_opt(y, m, d).unwrap();
+    let fresh = || format!("T{}", &Uuid::new_v4().to_string()[..8]);
+    let t1 = d(2025, 1, 1);
+    let t2 = d(2026, 1, 1);
+
+    // A lone TOP-bracket correction at t2 — the set no longer opens at income zero.
+    let cc = fresh();
+    seed_params(&pool, &cc, t1).await;
+    sqlx::query("INSERT INTO payroll.pph21_brackets (country_code, effective_from, seq, lower_bound, upper_bound, rate) VALUES ($1,$2,5,5000000000,NULL,0.35)")
+        .bind(&cc).bind(t2).execute(&pool).await.unwrap();
+    assert!(
+        matches!(repo.resolve_as_of(&cc, t2).await, Err(StatutoryError::NoParamsForPeriod(..))),
+        "a lone top-bracket correction must refuse, never zero-tax below it"
+    );
+
+    // A lone PTKP tier at t2 — seven of the eight canonical tiers are missing.
+    let cc = fresh();
+    seed_params(&pool, &cc, t1).await;
+    sqlx::query("INSERT INTO payroll.pph21_ptkp (country_code, effective_from, tier, annual_amount) VALUES ($1,$2,'tk1',58500000)")
+        .bind(&cc).bind(t2).execute(&pool).await.unwrap();
+    assert!(
+        matches!(repo.resolve_as_of(&cc, t2).await, Err(StatutoryError::NoParamsForPeriod(..))),
+        "a lone PTKP tier must refuse rather than 500 on the first affected employee"
+    );
+
+    // A lone TER category at t2 — the other two categories are absent at that date.
+    let cc = fresh();
+    seed_params(&pool, &cc, t1).await;
+    sqlx::query("INSERT INTO payroll.pph21_ter_rates (country_code, effective_from, category, seq, lower_bound, rate) VALUES ($1,$2,'ter_b',1,0,0.05)")
+        .bind(&cc).bind(t2).execute(&pool).await.unwrap();
+    assert!(
+        matches!(repo.resolve_as_of(&cc, t2).await, Err(StatutoryError::NoParamsForPeriod(..))),
+        "a lone TER category must refuse the period"
+    );
 }
