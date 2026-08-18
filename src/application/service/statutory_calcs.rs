@@ -866,10 +866,13 @@ pub fn thr(monthly_salary: Decimal, tenure_months: Decimal) -> Decimal {
 
 /// **Overtime pay** — workday schedule (the only day kind dispatched today).
 ///
-/// Hourly rate = `monthly_base / hours_per_month` (173 by regulation). `hours` walks the workday
-/// band sequence hour by hour — each full hour at its band's multiplier, a fractional final hour at
-/// its hour's multiplier pro-rata (e.g. 3.5h = h1×1.5 + h2×2 + h3×2 + h4×2×0.5). The sum is
-/// rounded once at the end. Rest-day/holiday schedules are seeded in config but intentionally not
+/// Hourly rate = `monthly_base / hours_per_month` (173 by regulation). `hours` is ONE day's
+/// overtime stretch: it walks the workday band sequence hour by hour — each full hour at its
+/// band's multiplier, a fractional final hour at its hour's multiplier pro-rata (e.g. 3.5h =
+/// h1×1.5 + h2×2 + h3×2 + h4×2×0.5). The band schedule — including the 1.5× first hour — resets
+/// with each day, so a period's overtime pay is the SUM of this function over its days; pricing
+/// a window-aggregated hour count would over-pay every one-hour-per-day pattern. The sum is
+/// rounded once per day. Rest-day/holiday schedules are seeded in config but intentionally not
 /// dispatched here; a rest-day-aware caller resolves them explicitly when that policy lands.
 ///
 /// Fails closed on an empty/unstartable band table ([`StatutoryError::MissingOvertimeBands`]) —
@@ -887,19 +890,17 @@ pub fn overtime_pay(hours: Decimal, monthly_base: Decimal, cfg: &OvertimeConfig)
     let frac = hours - whole;
     let mut total = Decimal::ZERO;
 
-    // Multiplier for the nth hour of the overtime stretch: the last band whose hour_from <= n.
-    // An hour beyond every band's range (gaps or an open end) is not payable — but a table whose
-    // FIRST band starts above hour 1 cannot price hour 1 at all, which is the fail-closed case.
+    // Multiplier for the nth hour of the overtime stretch: the band whose [hour_from, hour_to]
+    // range contains n. An hour in a gap between bands or past a capped final band matches
+    // nothing — the fail-closed error below, never a neighboring band's multiplier.
     let multiplier_for = |hour: i64| -> Option<Decimal> {
-        let mut found: Option<Decimal> = None;
-        for b in &cfg.workday {
-            if hour >= b.hour_from as i64 {
-                found = Some(b.multiplier);
-            } else {
-                break;
-            }
-        }
-        found
+        cfg.workday
+            .iter()
+            .find(|b| {
+                hour >= b.hour_from as i64
+                    && b.hour_to.map_or(true, |to| hour <= to as i64)
+            })
+            .map(|b| b.multiplier)
     };
 
     for h in 1..=(whole.to_i64().unwrap_or(i64::MAX)) {
@@ -1431,8 +1432,9 @@ mod tests {
 
     #[test]
     fn overtime_10h_at_8_7m_base_is_980635_84() {
-        // h1 → 1.5×, h2..h10 → 2× ⇒ 19.5 multiplier-hours; hourly = 8,700,000/173.
-        // 19.5 × 50,289.017341… = 980,635.8381… → 980,635.84.
+        // ONE day's 10h stretch: h1 → 1.5×, h2..h10 → 2× ⇒ 19.5 multiplier-hours; hourly =
+        // 8,700,000/173. 19.5 × 50,289.017341… = 980,635.8381… → 980,635.84. A period's pay is
+        // the sum of this over its days (each day restarts the 1.5× first hour).
         let pay = overtime_pay(
             Decimal::new(10, 0),
             Decimal::new(8_700_000, 0),
@@ -1440,6 +1442,26 @@ mod tests {
         )
         .unwrap();
         assert_eq!(pay, Decimal::from_str("980635.84").unwrap());
+    }
+
+    #[test]
+    fn overtime_hour_beyond_the_last_band_fails_closed() {
+        // A band table whose coverage ends (hour_to set, or a gap between bands) has NO multiplier
+        // for hours past its end — that must error, never borrow a neighbour band's rate.
+        let mut c = cfg();
+        c.overtime.workday = vec![
+            OvertimeBand { hour_from: 1, hour_to: Some(1), multiplier: Decimal::from_str("1.5").unwrap() },
+            OvertimeBand { hour_from: 2, hour_to: Some(3), multiplier: Decimal::new(2, 0) },
+        ];
+        // hour 4 is past the covered range → MissingOvertimeBands
+        assert!(matches!(
+            overtime_pay(Decimal::new(4, 0), Decimal::new(10_000_000, 0), &c.overtime),
+            Err(StatutoryError::MissingOvertimeBands)
+        ));
+        // hours inside the covered range still price normally (3h = 1.5 + 2 + 2 = 5.5 × base/173).
+        let pay = overtime_pay(Decimal::new(3, 0), Decimal::new(10_000_000, 0), &c.overtime).unwrap();
+        let hourly = Decimal::new(10_000_000, 0) / Decimal::new(173, 0);
+        assert_eq!(pay, (Decimal::from_str("5.5").unwrap() * hourly).round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero));
     }
 
     #[test]

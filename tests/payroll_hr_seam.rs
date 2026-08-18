@@ -664,12 +664,15 @@ fn computed_accounts(a: &PayrollAccounts) -> pay::StatutoryAccounts {
 }
 
 // PHRSEAM-3 — overtime hours come from ATTENDANCE's time_debt (the v2.0 daily rollup JSON the
-// attendance module is the sole writer of): five July days × 120 overtime minutes = 10h, priced on
-// an 8,700,000 monthly base through the statutory 173-hour divisor → the seeded workday bands
-// (h1 ×1.5, h2+ ×2.0 = 19.5 multiplier-hours) → 19.5 × 8,700,000/173 = 980,635.84 (2dp,
-// half-away-from-zero; pinned independently by the calc unit suite). The orchestrator reads the
-// hours through the pool input port (the same SQL attendance exports), stamps them on the slip,
-// and books the pay as an ordinary earning line so it rides the balanced salary journal.
+// attendance module is the sole writer of): five July days × 120 overtime minutes = 10h, priced
+// PER DAY on an 8,700,000 monthly base through the statutory 173-hour divisor and the seeded
+// workday bands (each day: h1 ×1.5 + h2 ×2.0 = 3.5 multiplier-hours; 5 × 3.5 = 17.5) →
+// 17.5 × 8,700,000/173 = 880,057.80 (2dp, half-away-from-zero; the one-day-stretch unit case
+// is pinned by the calc unit suite). The 1.5× first-hour premium resets DAILY — pricing the
+// window aggregate instead would read hour 1 of the PERIOD at 1.5× and over-pay every
+// one-hour-per-day pattern. The orchestrator reads the stretches through the pool input port
+// (the same SQL attendance exports), stamps the summed hours on the slip, and books the pay as
+// an ordinary earning line so it rides the balanced salary journal.
 #[tokio::test]
 async fn phrseam3_overtime_comes_from_attendance_time_debt() {
     let pool = pool().await;
@@ -779,10 +782,10 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(ot.0, dec("980635.84"), "19.5 multiplier-hours × 8,700,000/173 = 980,635.84");
+    assert_eq!(ot.0, dec("880057.80"), "5 days × (1h@1.5 + 1h@2.0) = 17.5 multiplier-hours × 8,700,000/173 = 880,057.80 — the first-hour premium resets DAILY");
 
     // Gross = base + overtime earning (no proration, no THR at tenure 0).
-    assert_eq!(s.gross_pay, dec("8700000") + dec("980635.84"), "overtime rides gross as an earning");
+    assert_eq!(s.gross_pay, dec("8700000") + dec("880057.80"), "overtime rides gross as an earning");
 }
 
 // PHRSEAM-4 — the TER dispatch runs on REAL employee tax rows through the computed-slip
