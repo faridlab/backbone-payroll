@@ -1,5 +1,14 @@
 # Backbone Module Skeleton
 
+> **This module is `backbone-payroll`** — the payroll run engine (draft → processed → posted),
+> computed salary slips over effective-dated statutory parameter tables (PPh 21 brackets + TER,
+> BPJS, overtime bands — resolved as-of each period, seeded by migration with no CRUD surface),
+> per-day overtime pricing from the attendance rollup, and fail-closed GL / remittance seams.
+> Start with [docs/adr/ADR-001](docs/adr/ADR-001-payroll-run-engine-and-gl-posting.md) and
+> [ADR-002](docs/adr/ADR-002-statutory-parameter-tables.md); the pinned statutory arithmetic and
+> its hand derivations live in [docs/golden-cases.md](docs/golden-cases.md). The skeleton text
+> below documents the shared module layout every backbone module uses.
+
 A minimal, copy-ready starting point for new Backbone Framework modules.
 It ships with exactly **one** reference entity (`Example`) wired end-to-end
 so you can rename it to your own domain concept and start generating.

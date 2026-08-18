@@ -42,6 +42,8 @@ This handbook is the *narrative*. Two reference sets live alongside it — link 
 
 - **[Schema DSL reference](schema/README.md)** — the exact YAML grammar: [types](schema/TYPES.md), [model rules](schema/RULE_FORMAT_MODELS.md), [generation targets](schema/GENERATION.md), [error codes](schema/ERROR_CODES.md), [examples](schema/EXAMPLES.md). This is the *Reference* corner of Diátaxis; the handbook explains the *why*.
 - **[Business flows](business-flows/README.md)** — one doc per business flow (actors, preconditions, rules, postconditions), each linked to its executable BDD oracle.
+- **[ADRs](adr/ADR-001-payroll-run-engine-and-gl-posting.md)** — the load-bearing decisions (run engine + GL posting; statutory parameters as effective-dated rows).
+- **[Golden cases](golden-cases.md)** — every pinned statutory figure with its hand derivation, and the rule for adding a new one.
 
 ## Conventions this handbook follows
 
