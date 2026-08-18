@@ -58,6 +58,16 @@ pub struct RunScopeRow {
     pub status: String,
 }
 
+/// The computed-slip orchestrator's run read: company + state + the period (which statutory
+/// parameter set is effective) + the expense account overtime/THR earning lines book against.
+pub struct RunPeriodRow {
+    pub company_id: Uuid,
+    pub status: String,
+    pub period_year: i32,
+    pub period_month: i32,
+    pub salary_expense_account_id: Option<Uuid>,
+}
+
 /// What the GL post path reads before it builds the journal. The account columns are nullable in the
 /// schema, so they come back as `Option` for the caller to reject; `journal_id`/`accounting_post_id`
 /// are Some only once posted, which is what makes a re-post return the original journal.
@@ -124,6 +134,33 @@ impl PayrollEntryRepository {
         )
         .await?;
         Ok(row.map(|r| RunScopeRow { company_id: r.get("company_id"), status: r.get("status") }))
+    }
+
+    /// The run's period + state, read ID-only under the request scope (same pattern as
+    /// [`Self::find_scope_by_id`]).
+    pub async fn find_period_by_id(
+        &self,
+        pool: &PgPool,
+        run_id: Uuid,
+    ) -> Result<Option<RunPeriodRow>, sqlx::Error> {
+        let row = company_scope::fetch_optional_row_scoped(
+            pool,
+            sqlx::query(
+                r#"SELECT company_id, status::text AS status, period_year, period_month,
+                          salary_expense_account_id
+                   FROM payroll.payroll_entries
+                   WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
+            )
+            .bind(run_id),
+        )
+        .await?;
+        Ok(row.map(|r| RunPeriodRow {
+            company_id: r.get("company_id"),
+            status: r.get("status"),
+            period_year: r.get("period_year"),
+            period_month: r.get("period_month"),
+            salary_expense_account_id: r.get("salary_expense_account_id"),
+        }))
     }
 
     /// Record the rolled-up totals and move `draft → processed`. Returns rows affected: 0 = not draft.
