@@ -8,6 +8,9 @@ use common::*;
 
 use backbone_payroll::application::service::payroll_events::LoggingSink;
 use backbone_payroll::application::service::payroll_write_service::*;
+use backbone_payroll::application::service::statutory_calcs::StatutoryError;
+use backbone_payroll::infrastructure::persistence::StatutoryParamsRepository;
+use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
@@ -52,7 +55,7 @@ async fn pgc1_full_month_net_pay() {
 
     svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure,
-        working_days: dec("22"), unpaid_days: dec("0"), statutory: statutory(&a),
+        working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
     }).await.unwrap();
 
     svc.process_payroll_entry(run).await.unwrap();
@@ -92,7 +95,7 @@ async fn pgc2_unpaid_days_prorate_gross() {
 
     let slip = svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure,
-        working_days: dec("22"), unpaid_days: dec("2"), statutory: statutory(&a),
+        working_days: dec("22"), unpaid_days: dec("2"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
     }).await.unwrap();
 
     let row = sqlx::query_scalar::<_, Decimal>(
@@ -124,7 +127,7 @@ async fn pgc3_run_rollup_and_deduction_grouping() {
     for _ in 0..2 {
         svc.add_salary_slip(run, NewSalarySlip {
             employee_id: Uuid::new_v4(), structure_id: structure,
-            working_days: dec("22"), unpaid_days: dec("0"), statutory: statutory(&a),
+            working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
         }).await.unwrap();
     }
     svc.process_payroll_entry(run).await.unwrap();
@@ -163,7 +166,7 @@ async fn pgc4_post_is_idempotent() {
     }).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure,
-        working_days: dec("22"), unpaid_days: dec("0"), statutory: statutory(&a),
+        working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
     }).await.unwrap();
     svc.process_payroll_entry(run).await.unwrap();
 
@@ -194,7 +197,7 @@ async fn pgc5_payroll_posted_carries_payable_breakdown() {
     }).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure,
-        working_days: dec("22"), unpaid_days: dec("0"), statutory: statutory(&a),
+        working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
     }).await.unwrap();
     svc.process_payroll_entry(run).await.unwrap();
 
@@ -216,4 +219,119 @@ async fn pgc5_payroll_posted_carries_payable_breakdown() {
     // The breakdown reconciles to the lump control total.
     let sum: Decimal = posted.payables.iter().map(|p| p.amount).sum();
     assert_eq!(sum, posted.total_deductions, "payables reconcile total_deductions");
+}
+
+/// Seed one complete, internally-consistent parameter set for `cc` at `effective` — the smallest
+/// set the resolver accepts (one bracket, one PTKP tier, one TER band, the full BPJS component
+/// matrix, two workday overtime bands). A per-test fictional country code isolates the rows from
+/// the seeded "ID" data and from parallel tests.
+async fn seed_params(pool: &sqlx::PgPool, cc: &str, effective: NaiveDate) {
+    sqlx::query("INSERT INTO payroll.pph21_brackets (country_code, effective_from, seq, lower_bound, upper_bound, rate) VALUES ($1,$2,1,0,NULL,0.05)")
+        .bind(cc).bind(effective).execute(pool).await.unwrap();
+    sqlx::query("INSERT INTO payroll.pph21_ptkp (country_code, effective_from, tier, annual_amount) VALUES ($1,$2,'tk0',54000000)")
+        .bind(cc).bind(effective).execute(pool).await.unwrap();
+    sqlx::query("INSERT INTO payroll.pph21_ter_rates (country_code, effective_from, category, seq, lower_bound, rate) VALUES ($1,$2,'ter_a',1,0,0.01)")
+        .bind(cc).bind(effective).execute(pool).await.unwrap();
+    for (component, side, rate, cap) in [
+        ("kes", "employee", dec("0.01"), Some(dec("12000000"))),
+        ("kes", "employer", dec("0.04"), Some(dec("12000000"))),
+        ("jht", "employee", dec("0.02"), None),
+        ("jht", "employer", dec("0.037"), None),
+        ("jp", "employee", dec("0.01"), Some(dec("10547400"))),
+        ("jp", "employer", dec("0.02"), Some(dec("10547400"))),
+        ("jkk_3", "employer", dec("0.0024"), None),
+        ("jkm", "employer", dec("0.003"), None),
+    ] {
+        sqlx::query("INSERT INTO payroll.bpjs_params (country_code, effective_from, component, side, rate, wage_cap) VALUES ($1,$2,$3,$4,$5,$6)")
+            .bind(cc).bind(effective).bind(component).bind(side).bind(rate)
+            .bind(cap)
+            .execute(pool).await.unwrap();
+    }
+    for (hour_from, hour_to, multiplier) in [(1, Some(1), dec("1.5")), (2, None, dec("2.0"))] {
+        sqlx::query("INSERT INTO payroll.overtime_params (country_code, effective_from, day_kind, hour_from, hour_to, multiplier) VALUES ($1,$2,'workday',$3,$4,$5)")
+            .bind(cc).bind(effective).bind(hour_from).bind(hour_to).bind(multiplier)
+            .execute(pool).await.unwrap();
+    }
+}
+
+// PGC-6 — as-of resolution edges: a period before ANY effective row refuses (fail-closed, never a
+// silent zero tax); the set in force at `as_of` is the greatest effective_from <= it; a NEW
+// effective set is invisible until its own date — so a mid-year law change lands on the first run
+// of the month it takes effect, never retroactively.
+#[tokio::test]
+async fn pgc6_params_resolve_as_of_effective_from() {
+    let pool = pool().await;
+    let cc = format!("T{}", &Uuid::new_v4().to_string()[..8]);
+    let repo = StatutoryParamsRepository::new(pool.clone());
+    let d = |y, m, d| NaiveDate::from_ymd_opt(y, m, d).unwrap();
+
+    seed_params(&pool, &cc, d(2025, 1, 1)).await;
+
+    // Before any effective row → fail closed.
+    let pre = repo.resolve_as_of(&cc, d(2024, 12, 31)).await;
+    assert!(
+        matches!(pre, Err(StatutoryError::NoParamsForPeriod(..))),
+        "a period before any effective row must refuse, not zero the tax"
+    );
+
+    // On/after the effective date → the set resolves and drives the calcs.
+    let cfg = repo.resolve_as_of(&cc, d(2025, 1, 1)).await.expect("resolve at effective date");
+    let mults: Vec<Decimal> = cfg.overtime.workday.iter().map(|b| b.multiplier).collect();
+    assert_eq!(mults, vec![dec("1.5"), dec("2.0")], "the 2025-01-01 workday bands");
+    assert!(cfg.pph21.ter.contains_key("ter_a"), "TER bands keyed by category");
+
+    // A new effective overtime set from 2026-06-01: invisible the day before, in force from its
+    // own date (a June run prices overtime under it; a May run never does).
+    let d2 = d(2026, 6, 1);
+    for (hour_from, hour_to, multiplier) in [(1, Some(1), dec("2.0")), (2, None, dec("3.0"))] {
+        sqlx::query("INSERT INTO payroll.overtime_params (country_code, effective_from, day_kind, hour_from, hour_to, multiplier) VALUES ($1,$2,'workday',$3,$4,$5)")
+            .bind(&cc).bind(d2).bind(hour_from).bind(hour_to).bind(multiplier)
+            .execute(&pool).await.unwrap();
+    }
+    let may = repo.resolve_as_of(&cc, d(2026, 5, 31)).await.expect("may resolve");
+    let june = repo.resolve_as_of(&cc, d(2026, 6, 1)).await.expect("june resolve");
+    let m: Vec<Decimal> = may.overtime.workday.iter().map(|b| b.multiplier).collect();
+    let j: Vec<Decimal> = june.overtime.workday.iter().map(|b| b.multiplier).collect();
+    assert_eq!(m, vec![dec("1.5"), dec("2.0")], "the day before a new effective set: old law");
+    assert_eq!(j, vec![dec("2.0"), dec("3.0")], "from its effective date: the new set applies");
+}
+
+// PGC-7 — the computed-slip orchestrator refuses a period with NO effective parameters (a run
+// dated before the seeded law tables) with the stable 422 `no_statutory_params_for_period` code —
+// the fail-closed contract the guarded surface surfaces. Parameter resolution precedes the
+// employee lookup, so no employee fixture is needed to reach the refusal.
+#[tokio::test]
+async fn pgc7_pre_effective_period_run_refuses_to_compute() {
+    let pool = pool().await;
+    let company = Uuid::new_v4();
+    let a = payroll_accounts(&pool, company).await;
+    let svc = PayrollWriteService::new(pool.clone());
+    let structure = standard_structure(&svc, company, a.salary_expense).await;
+
+    let run = svc.create_payroll_entry(NewPayrollEntry {
+        company_id: company, period_year: 2021, period_month: 12, // before the 2022-01-01 seeds
+        salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
+    }).await.unwrap();
+
+    let r = svc.add_computed_salary_slip(ComputedSlipRequest {
+        run_id: run,
+        employee_id: Uuid::new_v4(),
+        structure_id: structure,
+        working_days: dec("22"),
+        unpaid_days: dec("0"),
+        risk_class: 3,
+        accounts: StatutoryAccounts {
+            pph21_payable: a.pph21_payable,
+            bpjs_kesehatan_payable: a.bpjs_payable,
+            bpjs_ketenagakerjaan_payable: a.bpjs_payable,
+        },
+    }).await;
+
+    match r {
+        Err(e) => {
+            assert_eq!(e.code(), "no_statutory_params_for_period", "stable refusal code");
+            assert_eq!(e.http_status(), 422, "client-shaped refusal, not a 500");
+        }
+        Ok(_) => panic!("a pre-effective period must refuse to compute a slip"),
+    }
 }

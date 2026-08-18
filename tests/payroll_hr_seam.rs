@@ -155,6 +155,12 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
             period: "2026".into(),
             allocated: dec("30"),
             used: dec("0"),
+            accrual_plan_id: None,
+            date_from: None,
+            date_to: None,
+            last_accrual_at: None,
+            carried_over: dec("0"),
+            expired_at: None,
         })
         .await
         .expect("allocate timeoff balance");
@@ -167,6 +173,7 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
             date_end: leave_end,
             note: None,
             approval_employee_id: None,
+            approval_request_id: None,
             note_reject: None,
             status: backbone_timeoff::TimeoffRequestStatus::Pending,
         })
@@ -259,6 +266,8 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
                 structure_id: structure,
                 working_days: working_days_dec,
                 unpaid_days: unpaid_days_dec,
+                overtime_hours: dec("0"),
+                tax_method: None,
                 statutory: vec![],
             },
         )
@@ -366,6 +375,7 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
             npwp_number: Some(npwp()),
             ptkp_override: None,
             tax_method: backbone_employee::TaxMethod::default(),
+            ter_category: None, // brackets path — the TER dispatch is exercised by the golden suite
             tax_salary: backbone_employee::TaxSalary::default(),
             taxable_date: None,
             beginning_netto: None,
@@ -426,6 +436,7 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
     let gross_monthly = dec("12000000");
     let cfg = backbone_payroll::application::service::StatutoryConfig::default();
     let components = backbone_payroll::application::service::compute_statutory(
+        backbone_payroll::application::service::Pph21Method::NpwpBrackets, // tax row has no TER category
         ptkp,
         inputs.has_npwp,
         gross_monthly,
@@ -493,6 +504,8 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
                 structure_id: structure,
                 working_days: Decimal::from(23),
                 unpaid_days: Decimal::ZERO, // no proration — isolates the statutory effect on net
+                overtime_hours: dec("0"),
+                tax_method: None,
                 statutory: statutory_lines,
             },
         )
@@ -551,4 +564,320 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
     .await
     .unwrap();
     assert_eq!(thr_is_earning, (true, true), "THR is a statutory earning line");
+}
+
+// ── Shared fixture for the computed-slip orchestrator tests ──────────────────────────────────
+
+/// Onboard one employee (joined IN the pay month — tenure 0, so no THR line muddies the slip) with
+/// a tax row; returns the employee id. `has_npwp` selects NPWP presence, `ter` the TER category
+/// (`None` → the progressive-bracket path).
+async fn joined_this_month(
+    employee_svc: &EmployeeService,
+    employment_svc: &EmploymentService,
+    tax_svc: &EmployeeTaxService,
+    company: Uuid,
+    name: &str,
+    has_npwp: bool,
+    ter: Option<backbone_employee::TerCategory>,
+) -> Uuid {
+    let emp = employee_svc
+        .create(CreateEmployeeDto {
+            company_id: company,
+            employee_number: format!("E-{}", &Uuid::new_v4().to_string()[..8]),
+            user_id: None,
+            first_name: name.into(),
+            last_name: None,
+            email: None,
+            mobile_phone: None,
+            phone: None,
+            birth_place: None,
+            birth_date: None,
+            gender: None,
+            marital_status: None,
+            blood_type: None,
+            religion_id: None,
+        })
+        .await
+        .expect("create employee");
+    employment_svc
+        .create(CreateEmploymentDto {
+            company_id: company,
+            employee_id: emp.id,
+            employment_status: Default::default(),
+            join_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+            end_join_date: None,
+            department_id: None,
+            level_id: None,
+            position_id: None,
+            direct_manager_id: None,
+            status: Default::default(),
+        })
+        .await
+        .expect("create employment");
+    tax_svc
+        .create(CreateEmployeeTaxDto {
+            company_id: company,
+            employee_id: emp.id,
+            npwp_number: has_npwp.then(npwp),
+            ptkp_override: None,   // no family → derives TK0
+            tax_method: backbone_employee::TaxMethod::default(),
+            ter_category: ter,
+            tax_salary: backbone_employee::TaxSalary::default(),
+            taxable_date: None,
+            beginning_netto: None,
+            pph21_paid: None,
+        })
+        .await
+        .expect("create employee tax");
+    emp.id
+}
+
+/// One-earning structure of `amount` (the whole gross — isolates what the orchestrator computes).
+async fn flat_structure(
+    svc: &pay::PayrollWriteService,
+    company: Uuid,
+    expense: Uuid,
+    amount: Decimal,
+) -> Uuid {
+    svc.create_structure(pay::NewStructure {
+        company_id: company,
+        name: "Flat".into(),
+        components: vec![pay::NewComponent {
+            name: "Gaji Pokok".into(),
+            component_type: "earning".into(),
+            amount,
+            gl_account_id: expense,
+        }],
+    })
+    .await
+    .expect("structure")
+}
+
+/// The statutory payable accounts the computed-slip request carries (stopgaps until the accounting
+/// composition resolves them itself): BPJS Kesehatan + TK share one control account here.
+fn computed_accounts(a: &PayrollAccounts) -> pay::StatutoryAccounts {
+    pay::StatutoryAccounts {
+        pph21_payable: a.pph21_payable,
+        bpjs_kesehatan_payable: a.bpjs_payable,
+        bpjs_ketenagakerjaan_payable: a.bpjs_payable,
+    }
+}
+
+// PHRSEAM-3 — overtime hours come from ATTENDANCE's time_debt (the v2.0 daily rollup JSON the
+// attendance module is the sole writer of): five July days × 120 overtime minutes = 10h, priced on
+// an 8,700,000 monthly base through the statutory 173-hour divisor → the seeded workday bands
+// (h1 ×1.5, h2+ ×2.0 = 19.5 multiplier-hours) → 19.5 × 8,700,000/173 = 980,635.84 (2dp,
+// half-away-from-zero; pinned independently by the calc unit suite). The orchestrator reads the
+// hours through the pool input port (the same SQL attendance exports), stamps them on the slip,
+// and books the pay as an ordinary earning line so it rides the balanced salary journal.
+#[tokio::test]
+async fn phrseam3_overtime_comes_from_attendance_time_debt() {
+    let pool = pool().await;
+    let company = Uuid::new_v4();
+
+    let employee_svc =
+        EmployeeService::with_repository(Arc::new(EmployeeRepository::new(pool.clone())));
+    let employment_svc =
+        EmploymentService::with_repository(Arc::new(EmploymentRepository::new(pool.clone())));
+    let tax_svc =
+        EmployeeTaxService::with_repository(Arc::new(EmployeeTaxRepository::new(pool.clone())));
+    let attendance_svc =
+        AttendanceService::with_repository(Arc::new(AttendanceRepository::new(pool.clone())));
+
+    let emp = joined_this_month(
+        &employee_svc, &employment_svc, &tax_svc,
+        company, "Agus", true, None,
+    )
+    .await;
+
+    // Five attendance days in July 2026, each carrying 120 overtime minutes (10h total). Dates
+    // span a weekend boundary to prove the port reads the WHOLE period window, not workdays only.
+    let overtime_days = [
+        NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),  // Wed
+        NaiveDate::from_ymd_opt(2026, 7, 2).unwrap(),  // Thu
+        NaiveDate::from_ymd_opt(2026, 7, 3).unwrap(),  // Fri
+        NaiveDate::from_ymd_opt(2026, 7, 4).unwrap(),  // Sat — overtime on a rest day still counts
+        NaiveDate::from_ymd_opt(2026, 7, 6).unwrap(),  // Mon
+    ];
+    for day in overtime_days {
+        attendance_svc
+            .create(CreateAttendanceDto {
+                company_id: company,
+                employee_id: emp,
+                date: day,
+                schedule: None,
+                clockin: None,
+                clockout: None,
+                time_debt: Some(serde_json::json!({ "overtime_minutes": 120 })),
+                timeoff: None,
+            })
+            .await
+            .expect("seed attendance");
+    }
+    // One day OUTSIDE the period (August) must not leak into July's slip.
+    attendance_svc
+        .create(CreateAttendanceDto {
+            company_id: company,
+            employee_id: emp,
+            date: NaiveDate::from_ymd_opt(2026, 8, 3).unwrap(),
+            schedule: None,
+            clockin: None,
+            clockout: None,
+            time_debt: Some(serde_json::json!({ "overtime_minutes": 480 })),
+            timeoff: None,
+        })
+        .await
+        .expect("seed out-of-period attendance");
+
+    let a = payroll_accounts(&pool, company).await;
+    let svc = pay::PayrollWriteService::new(pool.clone());
+    let structure = flat_structure(&svc, company, a.salary_expense, dec("8700000")).await;
+    let run = svc
+        .create_payroll_entry(pay::NewPayrollEntry {
+            company_id: company,
+            period_year: 2026,
+            period_month: 7,
+            salary_expense_account_id: a.salary_expense,
+            salary_payable_account_id: a.salary_payable,
+        })
+        .await
+        .unwrap();
+
+    let slip = svc
+        .add_computed_salary_slip(pay::ComputedSlipRequest {
+            run_id: run,
+            employee_id: emp,
+            structure_id: structure,
+            working_days: dec("23"),
+            unpaid_days: dec("0"),
+            risk_class: 3,
+            accounts: computed_accounts(&a),
+        })
+        .await
+        .expect("computed slip");
+
+    #[derive(sqlx::FromRow)]
+    struct SlipStamp {
+        overtime_hours: Decimal,
+        tax_method: Option<String>,
+        gross_pay: Decimal,
+    }
+    let s: SlipStamp = sqlx::query_as(
+        "SELECT overtime_hours, tax_method, gross_pay FROM payroll.salary_slips WHERE id=$1",
+    )
+    .bind(slip)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(s.overtime_hours, dec("10"), "five days × 120 min = 10h in July only");
+    assert_eq!(s.tax_method.as_deref(), Some("npwp_brackets"), "no TER category → brackets stamp");
+
+    let ot: (Decimal,) = sqlx::query_as(
+        "SELECT amount FROM payroll.salary_slip_lines WHERE salary_slip_id=$1 AND name='Lembur/Overtime'",
+    )
+    .bind(slip)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(ot.0, dec("980635.84"), "19.5 multiplier-hours × 8,700,000/173 = 980,635.84");
+
+    // Gross = base + overtime earning (no proration, no THR at tenure 0).
+    assert_eq!(s.gross_pay, dec("8700000") + dec("980635.84"), "overtime rides gross as an earning");
+}
+
+// PHRSEAM-4 — the TER dispatch runs on REAL employee tax rows through the computed-slip
+// orchestrator. Three employees in one July run:
+//   A  TER A + NPWP, 10M gross → PPh 21 = 242,500  (base 9.7M × 2.5%), stamp "ter_a"
+//   B  TER A, NO NPWP, 10M gross → PPh 21 = 291,000 (242,500 × 1.2 no-NPWP surtax), stamp "ter_a"
+//   C  no TER + NPWP, 12M gross → PPh 21 = 625,000  (TK0 brackets — the regression pin), stamp
+//      "npwp_brackets"
+// A's full net is asserted end-to-end: 10,000,000 − (kes 100,000 + TK 300,000 + PPh 242,500)
+// = 9,357,500. TER seed values are the starter set pending statutory review — the pins document
+// exactly what ships today.
+#[tokio::test]
+async fn phrseam4_computed_slip_dispatches_on_ter_category() {
+    let pool = pool().await;
+    let company = Uuid::new_v4();
+
+    let employee_svc =
+        EmployeeService::with_repository(Arc::new(EmployeeRepository::new(pool.clone())));
+    let employment_svc =
+        EmploymentService::with_repository(Arc::new(EmploymentRepository::new(pool.clone())));
+    let tax_svc =
+        EmployeeTaxService::with_repository(Arc::new(EmployeeTaxRepository::new(pool.clone())));
+
+    let a_tera = joined_this_month(
+        &employee_svc, &employment_svc, &tax_svc,
+        company, "Rina", true, Some(backbone_employee::TerCategory::TerA),
+    )
+    .await;
+    let b_tera_nonpwp = joined_this_month(
+        &employee_svc, &employment_svc, &tax_svc,
+        company, "Dewi", false, Some(backbone_employee::TerCategory::TerA),
+    )
+    .await;
+    let c_brackets = joined_this_month(
+        &employee_svc, &employment_svc, &tax_svc,
+        company, "Budi", true, None,
+    )
+    .await;
+
+    let a = payroll_accounts(&pool, company).await;
+    let svc = pay::PayrollWriteService::new(pool.clone());
+    let structure_10m = flat_structure(&svc, company, a.salary_expense, dec("10000000")).await;
+    let structure_12m = flat_structure(&svc, company, a.salary_expense, dec("12000000")).await;
+    let run = svc
+        .create_payroll_entry(pay::NewPayrollEntry {
+            company_id: company,
+            period_year: 2026,
+            period_month: 7,
+            salary_expense_account_id: a.salary_expense,
+            salary_payable_account_id: a.salary_payable,
+        })
+        .await
+        .unwrap();
+
+    for (emp, structure) in [
+        (a_tera, structure_10m),
+        (b_tera_nonpwp, structure_10m),
+        (c_brackets, structure_12m),
+    ] {
+        svc.add_computed_salary_slip(pay::ComputedSlipRequest {
+            run_id: run,
+            employee_id: emp,
+            structure_id: structure,
+            working_days: dec("23"),
+            unpaid_days: dec("0"),
+            risk_class: 3,
+            accounts: computed_accounts(&a),
+        })
+        .await
+        .expect("computed slip");
+    }
+
+    // (tax stamp, PPh 21 line amount, net pay) per employee — the dispatch table.
+    let expected: &[(Uuid, &str, &str, &str)] = &[
+        // A: TER A + NPWP — full net 10,000,000 − 642,500 = 9,357,500.
+        (a_tera, "ter_a", "242500", "9357500"),
+        // B: TER A without NPWP — the 1.2 surtax lands on the withholding only; net 9,309,000.
+        (b_tera_nonpwp, "ter_a", "291000", "9309000"),
+        // C: brackets at 12M (TK0 + NPWP) — 625,000; net 12,000,000 − 1,090,474 = 10,909,526.
+        (c_brackets, "npwp_brackets", "625000", "10909526"),
+    ];
+    for (emp, stamp, pph21, net) in expected {
+        let row: (Option<String>, Decimal, Decimal) = sqlx::query_as(
+            r#"SELECT s.tax_method,
+                      (SELECT l.amount FROM payroll.salary_slip_lines l
+                        WHERE l.salary_slip_id = s.id AND l.name='PPh 21'),
+                      s.net_pay
+                 FROM payroll.salary_slips s WHERE s.employee_id=$1"#,
+        )
+        .bind(emp)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(row.0.as_deref(), Some(*stamp), "the method that computed the slip is stamped");
+        assert_eq!(row.1, dec(pph21), "PPh 21 for {stamp}");
+        assert_eq!(row.2, dec(net), "net pay for {stamp}");
+    }
 }

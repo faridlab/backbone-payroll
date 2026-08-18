@@ -10,7 +10,9 @@ use backbone_accounting::application::service::posting_service::{
     PostingLine, PostingRequest, PostingService,
 };
 use backbone_accounting::infrastructure::persistence::SqlxPostingRepository;
-use backbone_payroll::application::service::payroll_events::{PayrollEvent, PayrollEventSink};
+use backbone_payroll::application::service::payroll_events::{
+    PayrollEvent, PayrollEventError, PayrollEventSink,
+};
 use backbone_payroll::application::service::payroll_gl::{
     AccountingPostEnvelope, GlPostAck, GlPostRejected, GlPostSink,
 };
@@ -149,8 +151,10 @@ impl CapturingEvents {
         }
     }
 }
+#[async_trait::async_trait]
 impl PayrollEventSink for CapturingEvents {
-    fn publish(&self, event: &PayrollEvent) {
+    async fn publish(&self, event: &PayrollEvent) -> Result<(), PayrollEventError> {
         self.events.lock().unwrap().push(event.clone());
+        Ok(())
     }
 }
