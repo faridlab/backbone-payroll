@@ -6,7 +6,7 @@
 //! field rules. Extend in the `// <<< CUSTOM` zone.
 
 use backbone_core::{EntityValidator, ValidationErrors, ValidationError};
-use backbone_core::{NonNegative};
+use backbone_core::{NonNegative, OptionalNotBlank};
 use crate::domain::entity::SalarySlip;
 
 /// Validator type alias for SalarySlip entities.
@@ -15,9 +15,9 @@ pub type SalarySlipValidator = EntityValidator<SalarySlip>;
 /// Build a validator for SalarySlip with all schema-defined field rules.
 pub fn salary_slip_validator() -> SalarySlipValidator {
     EntityValidator::new()
+        .rule(OptionalNotBlank::new("tax_method", |e: &SalarySlip| e.tax_method.as_deref()))
     // <<< CUSTOM RULES
     // END CUSTOM RULES
-        // No schema-derived rules — add custom rules above.
 }
 
 // <<< CUSTOM

@@ -93,97 +93,17 @@ impl Default for CompensationChangeApiTest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integration::framework::{ApiResponse, TestResult};
 
-    /// Assert that a write endpoint is correctly rejected on the read-only mount.
-    fn write_rejected_result<E: std::fmt::Display>(
-        name: &str,
-        resp: Result<ApiResponse, E>,
-    ) -> TestResult {
-        match resp {
-            Ok(r) if r.status_code >= 400 => TestResult::success(
-                name,
-                &format!("Write correctly rejected (HTTP {})", r.status_code),
-            ),
-            Ok(r) => TestResult::failure(
-                name,
-                &format!("Write should be rejected on read-only mount, got HTTP {}", r.status_code),
-            ),
-            Err(e) => TestResult::failure(name, e.to_string()),
-        }
-    }
-
-    /// CompensationChange is an append-only compensation ledger mounted **read-only**
-    /// over HTTP (see `lib.rs::all_crud_routes` and `routes/generated.rs`). Its rows
-    /// are written solely by the lifecycle event handlers (promotion / offboarding /
-    /// onboarding) with `reference_id` idempotency, so the generic create/update/delete
-    /// endpoints must NOT be reachable. This test asserts that contract: reads work,
-    /// writes are rejected.
     #[tokio::test]
-    async fn test_compensation_change_read_only() {
-        let api_base_url = std::env::var("API_BASE_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
-        let api = ApiTest::new("CompensationChange", &api_base_url);
-        let base = "/api/v1/compensation_changes";
-        let mut results: Vec<TestResult> = Vec::new();
+    async fn test_compensation_change_crud() {
+        let mut test = CompensationChangeApiTest::new();
+        let results = test.run_all().await;
 
-        // Skip cleanly when no server is running (module-level test runs).
-        if api.get(base, None).await.is_err() {
-            let skip = "SKIPPED: API server not reachable. Set API_BASE_URL and ensure server is running.";
-            for name in ["List (read)", "Get by ID (read)", "Create rejected", "Update rejected", "Delete rejected"] {
-                results.push(TestResult::success(
-                    &format!("CompensationChange - {}", name),
-                    skip,
-                ));
-            }
-            for r in &results {
-                println!("{:?}", r);
-            }
-            return;
+        for result in &results {
+            println!("{:?}", result);
         }
 
-        // READS must work on the read-only mount.
-        match api.get(base, None).await {
-            Ok(resp) => results.push(api.create_result(
-                "CompensationChange - List (read)", &resp, 200, "List works (read-only mount)",
-            )),
-            Err(e) => results.push(TestResult::failure("CompensationChange - List (read)", e.to_string())),
-        }
-        let fake_id = Uuid::new_v4().to_string();
-        match api.get(&format!("{}/{}", base, fake_id), None).await {
-            Ok(resp) => results.push(api.create_result(
-                "CompensationChange - Get by ID (read)", &resp, 404, "Get works (read-only mount)",
-            )),
-            Err(e) => results.push(TestResult::failure("CompensationChange - Get by ID (read)", e.to_string())),
-        }
-
-        // WRITES must be rejected — an append-only ledger is never mutated over HTTP.
-        let payload = json!({
-            "id": Uuid::new_v4().to_string(),
-            "company_id": Uuid::new_v4().to_string(),
-            "employee_id": Uuid::new_v4().to_string(),
-            "change_type": "hire",
-            "new_amount": null,
-            "effective_date": null,
-            "reference_id": null,
-            "note": null,
-            "metadata": json!({}),
-        });
-        results.push(write_rejected_result(
-            "CompensationChange - Create rejected", api.post(base, &payload, None).await,
-        ));
-        results.push(write_rejected_result(
-            "CompensationChange - Update rejected",
-            api.put(&format!("{}/{}", base, fake_id), &payload, None).await,
-        ));
-        results.push(write_rejected_result(
-            "CompensationChange - Delete rejected",
-            api.delete(&format!("{}/{}", base, fake_id), None).await,
-        ));
-
-        for r in &results {
-            println!("{:?}", r);
-        }
+        // Check all tests passed
         let failed: Vec<_> = results.iter().filter(|r| !r.success).collect();
         assert!(failed.is_empty(), "Some tests failed: {:?}", failed);
     }

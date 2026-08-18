@@ -8,7 +8,7 @@
 //! ## Usage from other modules
 //!
 //! ```text
-//! use payroll::exports::{CompensationChangeDto, PayrollQueryService};
+//! use payroll::exports::{CompensationChangeDto};
 //! ```
 
 mod types;
@@ -45,9 +45,6 @@ pub use events::*;
 /// - `SalaryComponentDto` - Data transfer object for SalaryComponent
 /// - `SalaryComponentSummary` - Summary view of SalaryComponent
 /// - `SalaryComponentId` - Type-safe ID wrapper
-///
-/// ## Public Services
-/// - `PayrollQueryService` - Read-only queries
 ///
 /// ## Public Events
 /// - `CompensationChangeCreatedEvent` - Published when CompensationChange is created

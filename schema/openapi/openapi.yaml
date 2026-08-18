@@ -2643,6 +2643,13 @@ components:
           type: string
         net_pay:
           type: string
+        overtime_hours:
+          nullable: true
+          type: string
+        tax_method:
+          nullable: true
+          type: string
+          maxLength: 20
         metadata:
           type: object
 
@@ -2695,6 +2702,13 @@ components:
           type: string
         net_pay:
           type: string
+        overtime_hours:
+          nullable: true
+          type: string
+        tax_method:
+          nullable: true
+          type: string
+          maxLength: 20
         metadata:
           type: object
 
@@ -2734,6 +2748,13 @@ components:
           type: string
         net_pay:
           type: string
+        overtime_hours:
+          nullable: true
+          type: string
+        tax_method:
+          nullable: true
+          type: string
+          maxLength: 20
         metadata:
           type: object
 
@@ -2763,6 +2784,13 @@ components:
           type: string
         net_pay:
           type: string
+        overtime_hours:
+          nullable: true
+          type: string
+        tax_method:
+          nullable: true
+          type: string
+          maxLength: 20
         metadata:
           type: object
 

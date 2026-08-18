@@ -65,7 +65,7 @@ pub struct SalaryComponent {
 impl SalaryComponent {
     /// Create a builder for SalaryComponent
     pub fn builder() -> SalaryComponentBuilder {
-        SalaryComponentBuilder::default()
+        <SalaryComponentBuilder as Default>::default()
     }
 
     /// Create a new SalaryComponent with required fields
@@ -292,7 +292,7 @@ impl SalaryComponentBuilder {
             structure_id,
             company_id,
             name,
-            component_type: self.component_type.unwrap_or(ComponentType::default()),
+            component_type: self.component_type.unwrap_or_default(),
             amount: self.amount.unwrap_or(Decimal::from(0)),
             gl_account_id,
             metadata: AuditMetadata::default(),

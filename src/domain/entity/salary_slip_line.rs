@@ -66,7 +66,7 @@ pub struct SalarySlipLine {
 impl SalarySlipLine {
     /// Create a builder for SalarySlipLine
     pub fn builder() -> SalarySlipLineBuilder {
-        SalarySlipLineBuilder::default()
+        <SalarySlipLineBuilder as Default>::default()
     }
 
     /// Create a new SalarySlipLine with required fields
@@ -304,7 +304,7 @@ impl SalarySlipLineBuilder {
             salary_slip_id,
             company_id,
             name,
-            component_type: self.component_type.unwrap_or(ComponentType::default()),
+            component_type: self.component_type.unwrap_or_default(),
             is_statutory: self.is_statutory.unwrap_or(false),
             amount: self.amount.unwrap_or(Decimal::from(0)),
             gl_account_id,

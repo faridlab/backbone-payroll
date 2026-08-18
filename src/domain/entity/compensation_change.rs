@@ -66,7 +66,7 @@ pub struct CompensationChange {
 impl CompensationChange {
     /// Create a builder for CompensationChange
     pub fn builder() -> CompensationChangeBuilder {
-        CompensationChangeBuilder::default()
+        <CompensationChangeBuilder as Default>::default()
     }
 
     /// Create a new CompensationChange with required fields

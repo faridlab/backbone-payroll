@@ -71,7 +71,7 @@ pub struct PayrollEntry {
 impl PayrollEntry {
     /// Create a builder for PayrollEntry
     pub fn builder() -> PayrollEntryBuilder {
-        PayrollEntryBuilder::default()
+        <PayrollEntryBuilder as Default>::default()
     }
 
     /// Create a new PayrollEntry with required fields
@@ -405,7 +405,7 @@ impl PayrollEntryBuilder {
             period_year,
             period_month,
             posting_date: self.posting_date,
-            status: self.status.unwrap_or(PayrollStatus::default()),
+            status: self.status.unwrap_or_default(),
             salary_expense_account_id: self.salary_expense_account_id,
             salary_payable_account_id: self.salary_payable_account_id,
             total_gross: self.total_gross.unwrap_or(Decimal::from(0)),

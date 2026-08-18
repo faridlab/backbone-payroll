@@ -59,7 +59,7 @@ pub struct SalaryStructure {
 impl SalaryStructure {
     /// Create a builder for SalaryStructure
     pub fn builder() -> SalaryStructureBuilder {
-        SalaryStructureBuilder::default()
+        <SalaryStructureBuilder as Default>::default()
     }
 
     /// Create a new SalaryStructure with required fields

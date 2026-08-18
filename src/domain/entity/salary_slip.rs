@@ -58,6 +58,8 @@ pub struct SalarySlip {
     pub gross_pay: Decimal,
     pub total_deductions: Decimal,
     pub net_pay: Decimal,
+    pub overtime_hours: Option<Decimal>,
+    pub tax_method: Option<String>,
     #[serde(default)]
     #[sqlx(json)]
     pub metadata: AuditMetadata,
@@ -66,7 +68,7 @@ pub struct SalarySlip {
 impl SalarySlip {
     /// Create a builder for SalarySlip
     pub fn builder() -> SalarySlipBuilder {
-        SalarySlipBuilder::default()
+        <SalarySlipBuilder as Default>::default()
     }
 
     /// Create a new SalarySlip with required fields
@@ -82,6 +84,8 @@ impl SalarySlip {
             gross_pay,
             total_deductions,
             net_pay,
+            overtime_hours: None,
+            tax_method: None,
             metadata: AuditMetadata::default(),
         }
     }
@@ -147,6 +151,18 @@ impl SalarySlip {
         self
     }
 
+    /// Set the overtime_hours field (chainable)
+    pub fn with_overtime_hours(mut self, value: Decimal) -> Self {
+        self.overtime_hours = Some(value);
+        self
+    }
+
+    /// Set the tax_method field (chainable)
+    pub fn with_tax_method(mut self, value: String) -> Self {
+        self.tax_method = Some(value);
+        self
+    }
+
     // ==========================================================
     // Partial Update
     // ==========================================================
@@ -181,6 +197,12 @@ impl SalarySlip {
                 }
                 "net_pay" => {
                     if let Ok(v) = serde_json::from_value(value) { self.net_pay = v; }
+                }
+                "overtime_hours" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.overtime_hours = v; }
+                }
+                "tax_method" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.tax_method = v; }
                 }
                 _ => {} // ignore unknown fields
             }
@@ -265,6 +287,8 @@ pub struct SalarySlipBuilder {
     gross_pay: Option<Decimal>,
     total_deductions: Option<Decimal>,
     net_pay: Option<Decimal>,
+    overtime_hours: Option<Decimal>,
+    tax_method: Option<String>,
 }
 
 impl SalarySlipBuilder {
@@ -322,6 +346,18 @@ impl SalarySlipBuilder {
         self
     }
 
+    /// Set the overtime_hours field (optional)
+    pub fn overtime_hours(mut self, value: Decimal) -> Self {
+        self.overtime_hours = Some(value);
+        self
+    }
+
+    /// Set the tax_method field (optional)
+    pub fn tax_method(mut self, value: String) -> Self {
+        self.tax_method = Some(value);
+        self
+    }
+
     /// Build the SalarySlip entity
     ///
     /// Returns Err if any required field without a default is missing.
@@ -341,6 +377,8 @@ impl SalarySlipBuilder {
             gross_pay: self.gross_pay.unwrap_or(Decimal::from(0)),
             total_deductions: self.total_deductions.unwrap_or(Decimal::from(0)),
             net_pay: self.net_pay.unwrap_or(Decimal::from(0)),
+            overtime_hours: self.overtime_hours,
+            tax_method: self.tax_method,
             metadata: AuditMetadata::default(),
         })
     }

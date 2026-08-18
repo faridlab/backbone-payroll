@@ -54,6 +54,11 @@ pub struct CreateSalarySlipDto {
     pub total_deductions: Decimal,
     #[serde(alias = "net_pay")]
     pub net_pay: Decimal,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "overtime_hours")]
+    pub overtime_hours: Option<Decimal>,
+    #[cfg_attr(feature = "validation", validate(length(max = 20)))]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "tax_method")]
+    pub tax_method: Option<String>,
 }
 
 // =============================================================================
@@ -90,6 +95,11 @@ pub struct UpdateSalarySlipDto {
     pub total_deductions: Decimal,
     #[serde(alias = "net_pay")]
     pub net_pay: Decimal,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "overtime_hours")]
+    pub overtime_hours: Option<Decimal>,
+    #[cfg_attr(feature = "validation", validate(length(max = 20)))]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "tax_method")]
+    pub tax_method: Option<String>,
 }
 
 // =============================================================================
@@ -126,12 +136,17 @@ pub struct PatchSalarySlipDto {
     pub total_deductions: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "net_pay")]
     pub net_pay: Option<Decimal>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "overtime_hours")]
+    pub overtime_hours: Option<Decimal>,
+    #[cfg_attr(feature = "validation", validate(length(max = 20)))]
+    #[serde(skip_serializing_if = "Option::is_none", alias = "tax_method")]
+    pub tax_method: Option<String>,
 }
 
 impl PatchSalarySlipDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.payroll_entry_id.is_some() || self.company_id.is_some() || self.employee_id.is_some() || self.structure_id.is_some() || self.working_days.is_some() || self.unpaid_days.is_some() || self.gross_pay.is_some() || self.total_deductions.is_some() || self.net_pay.is_some()
+        self.payroll_entry_id.is_some() || self.company_id.is_some() || self.employee_id.is_some() || self.structure_id.is_some() || self.working_days.is_some() || self.unpaid_days.is_some() || self.gross_pay.is_some() || self.total_deductions.is_some() || self.net_pay.is_some() || self.overtime_hours.is_some() || self.tax_method.is_some()
     }
 }
 
@@ -161,6 +176,8 @@ pub struct SalarySlipResponseDto {
     pub gross_pay: Decimal,
     pub total_deductions: Decimal,
     pub net_pay: Decimal,
+    pub overtime_hours: Option<Decimal>,
+    pub tax_method: Option<String>,
     pub metadata: AuditMetadata,
 }
 
@@ -241,6 +258,8 @@ impl From<SalarySlip> for SalarySlipResponseDto {
             gross_pay: entity.gross_pay,
             total_deductions: entity.total_deductions,
             net_pay: entity.net_pay,
+            overtime_hours: entity.overtime_hours,
+            tax_method: entity.tax_method,
             metadata: entity.metadata,
         }
     }
@@ -272,6 +291,8 @@ impl From<CreateSalarySlipDto> for SalarySlip {
             gross_pay: dto.gross_pay,
             total_deductions: dto.total_deductions,
             net_pay: dto.net_pay,
+            overtime_hours: dto.overtime_hours,
+            tax_method: dto.tax_method,
             metadata: AuditMetadata::default(),
         }
     }
@@ -290,6 +311,8 @@ impl From<&SalarySlip> for SalarySlipResponseDto {
             gross_pay: entity.gross_pay.clone(),
             total_deductions: entity.total_deductions.clone(),
             net_pay: entity.net_pay.clone(),
+            overtime_hours: entity.overtime_hours.clone(),
+            tax_method: entity.tax_method.clone(),
             metadata: entity.metadata.clone(),
         }
     }
@@ -312,6 +335,8 @@ impl backbone_core::ApplyUpdateDto<UpdateSalarySlipDto> for SalarySlip {
         self.gross_pay = dto.gross_pay;
         self.total_deductions = dto.total_deductions;
         self.net_pay = dto.net_pay;
+        self.overtime_hours = dto.overtime_hours;
+        self.tax_method = dto.tax_method;
         Ok(self)
     }
 }

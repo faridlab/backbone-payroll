@@ -184,6 +184,8 @@ pub struct SalarySlipDto {
     pub gross_pay: Decimal,
     pub total_deductions: Decimal,
     pub net_pay: Decimal,
+    pub overtime_hours: Option<Decimal>,
+    pub tax_method: Option<String>,
     pub metadata: serde_json::Value,
 }
 

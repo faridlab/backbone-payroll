@@ -41,7 +41,9 @@ impl SalarySlipRepository {
 
 /// The exact row an employee's slip writes. Mirrors the raw column shape, not the `SalarySlip` entity:
 /// `unpaid_days` is the service's clamped value and the three money columns are its already-computed,
-/// money-rounded results (`net = gross − deductions`).
+/// money-rounded results (`net = gross − deductions`). `overtime_hours`/`tax_method` are the audit
+/// snapshot of how the slip was built — NULL when the caller had no overtime input or computed no
+/// statutory path (both legal; the columns exist so a re-computation can be told apart from history).
 pub struct NewSalarySlipRow {
     pub id: Uuid,
     pub payroll_entry_id: Uuid,
@@ -53,6 +55,8 @@ pub struct NewSalarySlipRow {
     pub gross_pay: Decimal,
     pub total_deductions: Decimal,
     pub net_pay: Decimal,
+    pub overtime_hours: Option<Decimal>,
+    pub tax_method: Option<String>,
 }
 
 /// A run's slips rolled up. `count` is what distinguishes "an empty run" from "a run summing to zero".
@@ -82,11 +86,12 @@ impl SalarySlipRepository {
         sqlx::query(
             r#"INSERT INTO payroll.salary_slips
                  (id, payroll_entry_id, company_id, employee_id, structure_id, working_days, unpaid_days,
-                  gross_pay, total_deductions, net_pay)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)"#,
+                  gross_pay, total_deductions, net_pay, overtime_hours, tax_method)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"#,
         )
         .bind(s.id).bind(s.payroll_entry_id).bind(s.company_id).bind(s.employee_id).bind(s.structure_id)
         .bind(s.working_days).bind(s.unpaid_days).bind(s.gross_pay).bind(s.total_deductions).bind(s.net_pay)
+        .bind(s.overtime_hours).bind(s.tax_method.clone())
         .execute(conn)
         .await?;
         Ok(())

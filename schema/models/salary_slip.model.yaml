@@ -52,6 +52,14 @@ models:
         type: decimal
         attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
         description: "gross_pay − total_deductions (take-home)"
+      overtime_hours:
+        type: decimal?
+        attributes: ["@precision(8,2)", "@non_negative"]
+        description: "Overtime hours consumed when the slip was built (auditable snapshot; the pay itself is a line)"
+      tax_method:
+        type: string?
+        attributes: ["@max(20)"]
+        description: "PPh-21 path dispatched for this slip (npwp_brackets | ter_a | ter_b | ter_c) — snapshotted for audit"
       metadata:
         type: Metadata
         attributes: ["@audit_metadata"]

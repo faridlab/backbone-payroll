@@ -33,6 +33,8 @@ impl TestDataGenerator for SalarySlipTestData {
             "gross_pay": 0,
             "total_deductions": 0,
             "net_pay": 0,
+            "overtime_hours": null,
+            "tax_method": null,
             "metadata": json!({}),
         })
     }
@@ -50,6 +52,8 @@ impl TestDataGenerator for SalarySlipTestData {
             "gross_pay": 0,
             "total_deductions": 0,
             "net_pay": 0,
+            "overtime_hours": null,
+            "tax_method": null,
             "metadata": json!({}),
         })
     }

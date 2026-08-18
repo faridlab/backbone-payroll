@@ -53,7 +53,7 @@ pub struct HttpServices {
 /// 12. GET /api/v1/{collection}/:id/deleted - Get deleted by ID
 pub fn configure_routes(services: HttpServices) -> Router {
     Router::new()
-        // CompensationChange routes (READ-ONLY — append-only ledger; writes arrive via the lifecycle event handlers only)
+        // CompensationChange routes (READ-ONLY — append-only/event-sourced entity; writes arrive via the event handlers)
         .merge(create_compensation_change_read_routes(services.compensation_change))
         // PayrollEntry routes (12 Backbone endpoints)
         .merge(create_payroll_entry_routes(services.payroll_entry))
