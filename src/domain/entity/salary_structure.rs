@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
+
+use super::SalaryStructureStatus;
 use super::AuditMetadata;
 
 /// Strongly-typed ID for SalaryStructure
@@ -50,7 +52,7 @@ pub struct SalaryStructure {
     pub id: Uuid,
     pub company_id: Uuid,
     pub name: String,
-    pub is_active: bool,
+    pub status: SalaryStructureStatus,
     #[serde(default)]
     #[sqlx(json)]
     pub metadata: AuditMetadata,
@@ -63,12 +65,12 @@ impl SalaryStructure {
     }
 
     /// Create a new SalaryStructure with required fields
-    pub fn new(company_id: Uuid, name: String, is_active: bool) -> Self {
+    pub fn new(company_id: Uuid, name: String, status: SalaryStructureStatus) -> Self {
         Self {
             id: Uuid::new_v4(),
             company_id,
             name,
-            is_active,
+            status,
             metadata: AuditMetadata::default(),
         }
     }
@@ -123,6 +125,11 @@ impl SalaryStructure {
         self.metadata.deleted_by.as_ref()
     }
 
+    /// Get the current status
+    pub fn status(&self) -> &SalaryStructureStatus {
+        &self.status
+    }
+
 
     // ==========================================================
     // Partial Update
@@ -138,8 +145,8 @@ impl SalaryStructure {
                 "name" => {
                     if let Ok(v) = serde_json::from_value(value) { self.name = v; }
                 }
-                "is_active" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.is_active = v; }
+                "status" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.status = v; }
                 }
                 _ => {} // ignore unknown fields
             }
@@ -196,6 +203,7 @@ impl backbone_orm::EntityRepoMeta for SalaryStructure {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
         m.insert("company_id".to_string(), "uuid".to_string());
+        m.insert("status".to_string(), "salary_structure_status".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
@@ -214,7 +222,7 @@ impl backbone_orm::EntityRepoMeta for SalaryStructure {
 pub struct SalaryStructureBuilder {
     company_id: Option<Uuid>,
     name: Option<String>,
-    is_active: Option<bool>,
+    status: Option<SalaryStructureStatus>,
 }
 
 impl SalaryStructureBuilder {
@@ -230,9 +238,9 @@ impl SalaryStructureBuilder {
         self
     }
 
-    /// Set the is_active field (default: `true`)
-    pub fn is_active(mut self, value: bool) -> Self {
-        self.is_active = Some(value);
+    /// Set the status field (default: `SalaryStructureStatus::default()`)
+    pub fn status(mut self, value: SalaryStructureStatus) -> Self {
+        self.status = Some(value);
         self
     }
 
@@ -247,7 +255,7 @@ impl SalaryStructureBuilder {
             id: Uuid::new_v4(),
             company_id,
             name,
-            is_active: self.is_active.unwrap_or(true),
+            status: self.status.unwrap_or_default(),
             metadata: AuditMetadata::default(),
         })
     }

@@ -299,4 +299,3 @@ impl backbone_core::ApplyUpdateDto<UpdateCompensationChangeDto> for Compensation
 // Add custom DTOs specific to CompensationChange here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

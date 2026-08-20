@@ -93,4 +93,3 @@ async fn test_salary_component_api() {
         panic!("{} tests failed", failed.len());
     }
 }
-

@@ -186,4 +186,3 @@ pub fn create_protected_salary_slip_line_routes<A: AuthMiddleware + Send + Sync 
             }
         }))
 }
-

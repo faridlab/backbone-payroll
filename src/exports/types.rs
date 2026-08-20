@@ -302,7 +302,7 @@ pub struct SalaryStructureDto {
     pub id: SalaryStructureId,
     pub company_id: Uuid,
     pub name: String,
-    pub is_active: bool,
+    pub status: SalaryStructureStatus,
     pub metadata: serde_json::Value,
 }
 
@@ -311,6 +311,7 @@ pub struct SalaryStructureDto {
 pub struct SalaryStructureSummary {
     pub id: SalaryStructureId,
     pub name: String,
+    pub status: SalaryStructureStatus,
 }
 
 /// Reference to SalaryStructure for foreign key relationships

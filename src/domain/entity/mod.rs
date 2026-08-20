@@ -10,6 +10,7 @@ pub mod salary_structure;
 pub mod salary_component;
 pub mod compensation_change_type;
 pub mod payroll_status;
+pub mod salary_structure_status;
 pub mod component_type;
 
 // Re-exports
@@ -33,6 +34,7 @@ pub use salary_component::SalaryComponentBuilder;
 pub use salary_component::SalaryComponentId;
 pub use compensation_change_type::CompensationChangeType;
 pub use payroll_status::PayrollStatus;
+pub use salary_structure_status::SalaryStructureStatus;
 pub use component_type::ComponentType;
 
 // ==========================================================================

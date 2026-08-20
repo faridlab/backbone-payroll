@@ -2960,7 +2960,7 @@ components:
         - id
         - company_id
         - name
-        - is_active
+        - status
         - metadata
       properties:
         id:
@@ -2972,8 +2972,8 @@ components:
         name:
           type: string
           maxLength: 140
-        is_active:
-          type: boolean
+        status:
+          type: string
         metadata:
           type: object
 
@@ -2995,7 +2995,7 @@ components:
       required:
         - company_id
         - name
-        - is_active
+        - status
         - metadata
       properties:
         company_id:
@@ -3004,8 +3004,8 @@ components:
         name:
           type: string
           maxLength: 140
-        is_active:
-          type: boolean
+        status:
+          type: string
         metadata:
           type: object
 
@@ -3014,7 +3014,7 @@ components:
       required:
         - company_id
         - name
-        - is_active
+        - status
         - metadata
       properties:
         company_id:
@@ -3023,8 +3023,8 @@ components:
         name:
           type: string
           maxLength: 140
-        is_active:
-          type: boolean
+        status:
+          type: string
         metadata:
           type: object
 
@@ -3037,8 +3037,8 @@ components:
         name:
           type: string
           maxLength: 140
-        is_active:
-          type: boolean
+        status:
+          type: string
         metadata:
           type: object
 

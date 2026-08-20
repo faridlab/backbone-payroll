@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::domain::entity::SalaryStructure;
+use crate::domain::entity::{SalaryStructure, SalaryStructureStatus};
 
 /// Pagination parameters for list queries
 #[derive(Debug, Clone, Default)]
@@ -46,13 +46,13 @@ pub struct SalaryStructurePaginatedResult {
 pub struct SalaryStructureFilter {
     pub company_id: Option<Uuid>,
     pub name: Option<String>,
-    pub is_active: Option<bool>,
+    pub status: Option<SalaryStructureStatus>,
 }
 
 impl SalaryStructureFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.company_id.is_some() || self.name.is_some() || self.is_active.is_some()
+        self.company_id.is_some() || self.name.is_some() || self.status.is_some()
     }
 }
 

@@ -37,7 +37,7 @@ impl SalaryStructureRepository {
 }
 
 /// The exact row a structure definition writes. Mirrors the raw column shape, not the
-/// `SalaryStructure` entity: the insert hard-codes `is_active = true`, so that column is not a
+/// `SalaryStructure` entity: the insert hard-codes `status = 'active'`, so that column is not a
 /// parameter.
 pub struct NewStructureRow<'a> {
     pub id: Uuid,
@@ -59,8 +59,8 @@ impl SalaryStructureRepository {
         s: &NewStructureRow<'_>,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            r#"INSERT INTO payroll.salary_structures (id, company_id, name, is_active)
-               VALUES ($1,$2,$3,true)"#,
+            r#"INSERT INTO payroll.salary_structures (id, company_id, name, status)
+               VALUES ($1,$2,$3,'active')"#,
         )
         .bind(s.id).bind(s.company_id).bind(s.name)
         .execute(conn)

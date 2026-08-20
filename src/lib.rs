@@ -56,7 +56,6 @@ pub use application::service::{
 };
 pub use presentation::http::create_guarded_payroll_routes;
 // END CUSTOM
-
 use std::sync::Arc;
 use axum::Router;
 use sqlx::PgPool;

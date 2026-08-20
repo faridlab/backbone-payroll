@@ -18,6 +18,7 @@ use validator::Validate;
 
 use crate::domain::entity::SalaryStructure;
 use crate::domain::entity::AuditMetadata;
+use crate::domain::entity::SalaryStructureStatus;
 
 // =============================================================================
 // Create DTO
@@ -38,9 +39,7 @@ pub struct CreateSalaryStructureDto {
     #[cfg_attr(feature = "validation", validate(length(max = 140)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
-    #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_active")]
-    pub is_active: bool,
+    pub status: SalaryStructureStatus,
 }
 
 // =============================================================================
@@ -62,9 +61,7 @@ pub struct UpdateSalaryStructureDto {
     #[cfg_attr(feature = "validation", validate(length(max = 140)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
-    #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_active")]
-    pub is_active: bool,
+    pub status: SalaryStructureStatus,
 }
 
 // =============================================================================
@@ -87,15 +84,14 @@ pub struct PatchSalaryStructureDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "is_active")]
-    pub is_active: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<SalaryStructureStatus>,
 }
 
 impl PatchSalaryStructureDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.name.is_some() || self.is_active.is_some()
+        self.company_id.is_some() || self.name.is_some() || self.status.is_some()
     }
 }
 
@@ -117,8 +113,7 @@ pub struct SalaryStructureResponseDto {
     pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
-    #[cfg_attr(feature = "openapi", schema(example = true))]
-    pub is_active: bool,
+    pub status: SalaryStructureStatus,
     pub metadata: AuditMetadata,
 }
 
@@ -178,7 +173,7 @@ pub struct SalaryStructureSummaryDto {
     pub id: Uuid,
     pub company_id: Uuid,
     pub name: String,
-    pub is_active: bool,
+    pub status: SalaryStructureStatus,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -192,7 +187,7 @@ impl From<SalaryStructure> for SalaryStructureResponseDto {
             id: entity.id,
             company_id: entity.company_id,
             name: entity.name,
-            is_active: entity.is_active,
+            status: entity.status,
             metadata: entity.metadata,
         }
     }
@@ -205,7 +200,7 @@ impl From<SalaryStructure> for SalaryStructureSummaryDto {
             id: entity.id,
             company_id: entity.company_id,
             name: entity.name,
-            is_active: entity.is_active,
+            status: entity.status,
             created_at,
         }
     }
@@ -217,7 +212,7 @@ impl From<CreateSalaryStructureDto> for SalaryStructure {
             id: Uuid::new_v4(),
             company_id: dto.company_id,
             name: dto.name,
-            is_active: dto.is_active,
+            status: dto.status,
             metadata: AuditMetadata::default(),
         }
     }
@@ -229,7 +224,7 @@ impl From<&SalaryStructure> for SalaryStructureResponseDto {
             id: entity.id.clone(),
             company_id: entity.company_id.clone(),
             name: entity.name.clone(),
-            is_active: entity.is_active.clone(),
+            status: entity.status.clone(),
             metadata: entity.metadata.clone(),
         }
     }
@@ -245,7 +240,7 @@ impl backbone_core::ApplyUpdateDto<UpdateSalaryStructureDto> for SalaryStructure
     fn apply_update(mut self, dto: UpdateSalaryStructureDto) -> backbone_core::ServiceResult<Self> {
         self.company_id = dto.company_id;
         self.name = dto.name;
-        self.is_active = dto.is_active;
+        self.status = dto.status;
         Ok(self)
     }
 }
@@ -258,4 +253,3 @@ impl backbone_core::ApplyUpdateDto<UpdateSalaryStructureDto> for SalaryStructure
 // Add custom DTOs specific to SalaryStructure here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

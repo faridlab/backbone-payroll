@@ -26,7 +26,7 @@ impl TestDataGenerator for SalaryStructureTestData {
             "id": Uuid::new_v4().to_string(),
             "company_id": Uuid::new_v4().to_string(),
             "name": format!("Test {}", Uuid::new_v4().to_string().split('-').next().unwrap()),
-            "is_active": false,
+            "status": "active",
             "metadata": json!({}),
         })
     }
@@ -37,7 +37,7 @@ impl TestDataGenerator for SalaryStructureTestData {
             "id": id,
             "company_id": Uuid::new_v4().to_string(),
             "name": format!("Test {}", Uuid::new_v4().to_string().split('-').next().unwrap()),
-            "is_active": false,
+            "status": "active",
             "metadata": json!({}),
         })
     }

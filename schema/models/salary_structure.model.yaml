@@ -25,17 +25,17 @@ models:
         type: string
         attributes: ["@required", "@max(140)"]
         description: "Structure name (e.g. 'Staff Bulanan')"
-      is_active:
-        type: boolean
-        attributes: ["@default(true)"]
-        description: "Whether new slips may use this structure"
+      status:
+        type: SalaryStructureStatus
+        attributes: ["@default(active)"]
+        description: "Only active structures may back new slips"
       metadata:
         type: Metadata
         attributes: ["@audit_metadata"]
         description: "Audit metadata"
     indexes:
       - type: index
-        fields: [company_id, is_active]
+        fields: [company_id, status]
 
   - name: SalaryComponent
     collection: salary_components
@@ -80,6 +80,15 @@ models:
         fields: [company_id]
 
 enums:
+  - name: SalaryStructureStatus
+    description: "Lifecycle of a salary structure"
+    variants:
+      - name: active
+        description: "New salary slips may use this structure"
+        default: true
+      - name: inactive
+        description: "Retired; historical slips keep referencing it"
+
   - name: ComponentType
     description: "Whether a component adds to gross pay or is deducted"
     variants:

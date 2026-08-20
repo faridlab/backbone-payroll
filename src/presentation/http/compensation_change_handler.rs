@@ -187,4 +187,3 @@ pub fn create_protected_compensation_change_routes<A: AuthMiddleware + Send + Sy
             }
         }))
 }
-

@@ -310,4 +310,3 @@ impl backbone_core::ApplyUpdateDto<UpdateSalarySlipLineDto> for SalarySlipLine {
 // Add custom DTOs specific to SalarySlipLine here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-

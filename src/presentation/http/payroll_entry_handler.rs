@@ -187,4 +187,3 @@ pub fn create_protected_payroll_entry_routes<A: AuthMiddleware + Send + Sync + '
             }
         }))
 }
-

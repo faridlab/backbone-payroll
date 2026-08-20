@@ -349,4 +349,3 @@ impl backbone_core::ApplyUpdateDto<UpdateSalarySlipDto> for SalarySlip {
 // Add custom DTOs specific to SalarySlip here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
-
