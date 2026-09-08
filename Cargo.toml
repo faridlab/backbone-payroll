@@ -1,6 +1,6 @@
 [package]
 name = "backbone-payroll"
-version = "0.2.11"
+version = "0.2.13"
 edition = "2021"
 description = "Minimal Backbone Framework module skeleton"
 
@@ -17,19 +17,19 @@ path = "src/lib.rs"
 # or `rev = "<commit-sha>"`. Cargo dedupes the git fetch — the repo is only
 # cloned once even though four crates reference it.
 # -----------------------------------------------------------------------------
-backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.16", features = ["postgres"] }
-backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.16" }
+backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17", features = ["postgres"] }
+backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
 # `axum` feature required for the CompanyContext extractor the guarded routes use; without it
 # the `company` module isn't exported and lib-only builds (clippy/check without dev-deps'
 # feature unification) fail to resolve the import.
-backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.16", features = ["axum"] }
-backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.16" }
+backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17", features = ["axum"] }
+backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
 # Transactional-outbox consumer (ADR-005): the `promotion.salary` + `offboarding.settlement` handlers
 # dedup via `inbox::once` in the same tx as the compensation_changes insert. Pinned to the same tags
 # the rest of the HR constellation (employee/recruitment/lifecycle) uses so the
 # `IntegrationEventHandler` trait unifies across modules; the HR composer's [patch] block unifies
 # backbone-outbox onto local HEAD for dev.
-backbone-outbox = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.16" }
+backbone-outbox = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.17" }
 
 # Core async runtime and serialization
 tokio = { version = "1.0", features = ["full"] }
