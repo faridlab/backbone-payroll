@@ -49,7 +49,6 @@ impl From<CompensationChangeId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompensationChangeDto {
     pub id: CompensationChangeId,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub change_type: CompensationChangeType,
     pub new_amount: Option<Decimal>,
@@ -109,7 +108,6 @@ impl From<PayrollEntryId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PayrollEntryDto {
     pub id: PayrollEntryId,
-    pub company_id: Uuid,
     pub period_year: i32,
     pub period_month: i32,
     pub posting_date: Option<DateTime<Utc>>,
@@ -176,7 +174,6 @@ impl From<SalarySlipId> for Uuid {
 pub struct SalarySlipDto {
     pub id: SalarySlipId,
     pub payroll_entry_id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub structure_id: Option<Uuid>,
     pub working_days: Decimal,
@@ -240,7 +237,6 @@ impl From<SalarySlipLineId> for Uuid {
 pub struct SalarySlipLineDto {
     pub id: SalarySlipLineId,
     pub salary_slip_id: Uuid,
-    pub company_id: Uuid,
     pub name: String,
     pub component_type: ComponentType,
     pub is_statutory: bool,
@@ -300,7 +296,6 @@ impl From<SalaryStructureId> for Uuid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SalaryStructureDto {
     pub id: SalaryStructureId,
-    pub company_id: Uuid,
     pub name: String,
     pub status: SalaryStructureStatus,
     pub metadata: serde_json::Value,
@@ -359,7 +354,6 @@ impl From<SalaryComponentId> for Uuid {
 pub struct SalaryComponentDto {
     pub id: SalaryComponentId,
     pub structure_id: Uuid,
-    pub company_id: Uuid,
     pub name: String,
     pub component_type: ComponentType,
     pub amount: Decimal,

@@ -24,7 +24,6 @@ impl TestDataGenerator for PayrollEntryTestData {
         let now = Utc::now().to_rfc3339();
         json!({
             "id": Uuid::new_v4().to_string(),
-            "company_id": Uuid::new_v4().to_string(),
             "period_year": 1,
             "period_month": 1,
             "posting_date": null,
@@ -44,7 +43,6 @@ impl TestDataGenerator for PayrollEntryTestData {
         let now = Utc::now().to_rfc3339();
         json!({
             "id": id,
-            "company_id": Uuid::new_v4().to_string(),
             "period_year": 1,
             "period_month": 1,
             "posting_date": null,

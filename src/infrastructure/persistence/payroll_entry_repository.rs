@@ -14,7 +14,12 @@ use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use backbone_orm::company_scope;
+use backbone_orm::org_scope;
+// The scalar read twin lives only in the legacy `company_scope` module. Its connection discipline
+// is what this adapter needs — request-dedicated connection when the composing service bound one,
+// plain pool otherwise. The helper's legacy task-local branch is never taken: this module sets no
+// legacy scope of its own (ADR-0029).
+use backbone_orm::company_scope::fetch_one_scalar_scoped;
 
 use crate::domain::entity::PayrollEntry;
 
@@ -45,23 +50,20 @@ impl PayrollEntryRepository {
 /// insert hard-codes `draft` status and seeds all three totals at 0, so none of those are parameters.
 pub struct NewPayrollEntryRow {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub period_year: i32,
     pub period_month: i32,
     pub salary_expense_account_id: Uuid,
     pub salary_payable_account_id: Uuid,
 }
 
-/// A live run's company + lifecycle state — what the slip path reads before it writes.
-pub struct RunScopeRow {
-    pub company_id: Uuid,
+/// A live run's lifecycle state — what the slip path reads before it writes.
+pub struct RunStateRow {
     pub status: String,
 }
 
-/// The computed-slip orchestrator's run read: company + state + the period (which statutory
-/// parameter set is effective) + the expense account overtime/THR earning lines book against.
+/// The computed-slip orchestrator's run read: state + the period (which statutory parameter set is
+/// effective) + the expense account overtime/THR earning lines book against.
 pub struct RunPeriodRow {
-    pub company_id: Uuid,
     pub status: String,
     pub period_year: i32,
     pub period_month: i32,
@@ -72,7 +74,6 @@ pub struct RunPeriodRow {
 /// schema, so they come back as `Option` for the caller to reject; `journal_id`/`accounting_post_id`
 /// are Some only once posted, which is what makes a re-post return the original journal.
 pub struct RunPostingRow {
-    pub company_id: Uuid,
     pub status: String,
     pub salary_expense_account_id: Option<Uuid>,
     pub salary_payable_account_id: Option<Uuid>,
@@ -86,67 +87,68 @@ pub struct RunPostingRow {
 /// Hand-written PayrollEntry SQL. Lives here (not in the write service) per the module's 4-layer rule:
 /// services orchestrate and own the unit of work, repositories hold the SQL.
 impl PayrollEntryRepository {
-    /// Open a payroll run for a company/period, as a draft with zeroed totals.
+    /// Open a payroll run for a period, as a draft with zeroed totals.
     ///
-    /// A write outside any transaction: takes the pool and runs `execute_scoped` so the RLS fence
-    /// (ADR-0008) applies. The caller wraps this in `with_company_scope(Some(company))` — the company is
-    /// on the DTO, and that scope is what satisfies the INSERT's WITH CHECK.
+    /// A write outside any transaction: takes the pool and runs `execute_scoped` so the composing
+    /// service's tenancy RLS fence applies (ADR-0029). The caller relays the ambient org request
+    /// scope onto its own transaction first, or runs under HTTP where the request-dedicated
+    /// connection already carries it; an undecorated deployment is unfenced by design.
     ///
-    /// Returns the raw `sqlx::Error` deliberately: the caller inspects it for a unique violation to turn
-    /// a second run on the same (company, year, month) into a domain error.
+    /// Returns the raw `sqlx::Error` deliberately: the caller inspects it for a unique violation to
+    /// turn a second run on the same (org unit, year, month) into a domain error.
     pub async fn insert_entry(
         &self,
         pool: &PgPool,
         e: &NewPayrollEntryRow,
     ) -> Result<(), sqlx::Error> {
-        company_scope::execute_scoped(
+        org_scope::execute_scoped(
             pool,
             sqlx::query(
                 r#"INSERT INTO payroll.payroll_entries
-                     (id, company_id, period_year, period_month, status, salary_expense_account_id,
+                     (id, period_year, period_month, status, salary_expense_account_id,
                       salary_payable_account_id, total_gross, total_deductions, total_net)
-                   VALUES ($1,$2,$3,$4,'draft'::payroll_status,$5,$6,0,0,0)"#,
+                   VALUES ($1,$2,$3,'draft'::payroll_status,$4,$5,0,0,0)"#,
             )
-            .bind(e.id).bind(e.company_id).bind(e.period_year).bind(e.period_month)
+            .bind(e.id).bind(e.period_year).bind(e.period_month)
             .bind(e.salary_expense_account_id).bind(e.salary_payable_account_id),
         )
         .await?;
         Ok(())
     }
 
-    /// Read a live run's company + status — the slip path's lookup. `Ok(None)` = not found in scope.
+    /// Read a live run's status — the slip path's lookup. `Ok(None)` = not found in scope.
     ///
-    /// ID-only: no company argument to scope from up front. `fetch_optional_row_scoped` means it rides a
-    /// connection carrying the caller's `app.company_id`, so another company's run simply isn't found.
-    /// The company comes back on the row so the caller can bind its own tx to it.
-    pub async fn find_scope_by_id(
+    /// ID-only: `fetch_optional_row_scoped` rides a connection carrying the caller's org request
+    /// scope (ADR-0029), so another unit's run simply isn't found. The caller relays the same
+    /// ambient scope onto its own write transaction.
+    pub async fn find_state_by_id(
         &self,
         pool: &PgPool,
         run_id: Uuid,
-    ) -> Result<Option<RunScopeRow>, sqlx::Error> {
-        let row = company_scope::fetch_optional_row_scoped(
+    ) -> Result<Option<RunStateRow>, sqlx::Error> {
+        let row = org_scope::fetch_optional_row_scoped(
             pool,
             sqlx::query(
-                r#"SELECT company_id, status::text AS status FROM payroll.payroll_entries
+                r#"SELECT status::text AS status FROM payroll.payroll_entries
                    WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
             )
             .bind(run_id),
         )
         .await?;
-        Ok(row.map(|r| RunScopeRow { company_id: r.get("company_id"), status: r.get("status") }))
+        Ok(row.map(|r| RunStateRow { status: r.get("status") }))
     }
 
     /// The run's period + state, read ID-only under the request scope (same pattern as
-    /// [`Self::find_scope_by_id`]).
+    /// [`Self::find_state_by_id`]).
     pub async fn find_period_by_id(
         &self,
         pool: &PgPool,
         run_id: Uuid,
     ) -> Result<Option<RunPeriodRow>, sqlx::Error> {
-        let row = company_scope::fetch_optional_row_scoped(
+        let row = org_scope::fetch_optional_row_scoped(
             pool,
             sqlx::query(
-                r#"SELECT company_id, status::text AS status, period_year, period_month,
+                r#"SELECT status::text AS status, period_year, period_month,
                           salary_expense_account_id
                    FROM payroll.payroll_entries
                    WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
@@ -155,7 +157,6 @@ impl PayrollEntryRepository {
         )
         .await?;
         Ok(row.map(|r| RunPeriodRow {
-            company_id: r.get("company_id"),
             status: r.get("status"),
             period_year: r.get("period_year"),
             period_month: r.get("period_month"),
@@ -165,9 +166,9 @@ impl PayrollEntryRepository {
 
     /// Record the rolled-up totals and move `draft → processed`. Returns rows affected: 0 = not draft.
     ///
-    /// ID-only: no company argument — `execute_scoped` rides the request-dedicated connection's
-    /// `app.company_id`. An event-driven caller must wrap this in
-    /// `with_company_scope(Some(event.company_id))` or it fails closed.
+    /// ID-only: `execute_scoped` rides the request-dedicated connection's org request scope
+    /// (ADR-0029). A caller driving its own transaction relays the ambient scope onto it first
+    /// (`bind_org_scope_on`); an undecorated deployment is unfenced by design.
     pub async fn mark_processed(
         &self,
         pool: &PgPool,
@@ -176,7 +177,7 @@ impl PayrollEntryRepository {
         total_deductions: Decimal,
         total_net: Decimal,
     ) -> Result<u64, sqlx::Error> {
-        let done = company_scope::execute_scoped(
+        let done = org_scope::execute_scoped(
             pool,
             sqlx::query(
                 r#"UPDATE payroll.payroll_entries
@@ -191,18 +192,17 @@ impl PayrollEntryRepository {
 
     /// Read a live run for GL posting. `Ok(None)` = not found in scope.
     ///
-    /// ID-only: no company argument. Under HTTP the request-dedicated connection carries the scope.
-    /// Driven by an EVENT, the caller must wrap this in `with_company_scope(Some(event.company_id))` —
-    /// otherwise it fails closed.
+    /// ID-only: under HTTP the request-dedicated connection carries the org request scope
+    /// (ADR-0029); a caller driving its own transaction relays the ambient scope onto it first.
     pub async fn find_for_posting(
         &self,
         pool: &PgPool,
         run_id: Uuid,
     ) -> Result<Option<RunPostingRow>, sqlx::Error> {
-        let row = company_scope::fetch_optional_row_scoped(
+        let row = org_scope::fetch_optional_row_scoped(
             pool,
             sqlx::query(
-                r#"SELECT company_id, status::text AS status, salary_expense_account_id, salary_payable_account_id,
+                r#"SELECT status::text AS status, salary_expense_account_id, salary_payable_account_id,
                           total_gross, total_deductions, total_net, journal_id, accounting_post_id
                    FROM payroll.payroll_entries WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
             )
@@ -210,7 +210,7 @@ impl PayrollEntryRepository {
         )
         .await?;
         Ok(row.map(|r| RunPostingRow {
-            company_id: r.get("company_id"), status: r.get("status"),
+            status: r.get("status"),
             salary_expense_account_id: r.get("salary_expense_account_id"),
             salary_payable_account_id: r.get("salary_payable_account_id"),
             total_gross: r.get("total_gross"), total_deductions: r.get("total_deductions"),
@@ -223,8 +223,8 @@ impl PayrollEntryRepository {
     /// Returns rows affected: 0 = a racing caller already posted it, so this one re-reads that journal.
     /// This gate is what makes a run post AT MOST once.
     ///
-    /// A write outside any transaction; the caller wraps it in `with_company_scope(Some(company_id))`
-    /// using the company it read off the run.
+    /// A write outside any transaction: it rides the caller's org request scope (ADR-0029), relayed
+    /// onto the caller's transaction or carried by the request-dedicated connection.
     pub async fn mark_posted(
         &self,
         pool: &PgPool,
@@ -233,7 +233,7 @@ impl PayrollEntryRepository {
         journal_id: Uuid,
         post_id: Uuid,
     ) -> Result<u64, sqlx::Error> {
-        let done = company_scope::execute_scoped(
+        let done = org_scope::execute_scoped(
             pool,
             sqlx::query(
                 r#"UPDATE payroll.payroll_entries
@@ -246,14 +246,14 @@ impl PayrollEntryRepository {
         Ok(done.rows_affected())
     }
 
-    /// Re-read the journal the winner recorded, after a lost `mark_posted` race. Caller supplies the
-    /// company scope, as above.
+    /// Re-read the journal the winner recorded, after a lost `mark_posted` race. Rides the caller's
+    /// org request scope, as above.
     pub async fn fetch_journal_id(
         &self,
         pool: &PgPool,
         run_id: Uuid,
     ) -> Result<Uuid, sqlx::Error> {
-        company_scope::fetch_one_scalar_scoped(
+        fetch_one_scalar_scoped(
             pool,
             sqlx::query_scalar("SELECT journal_id FROM payroll.payroll_entries WHERE id=$1")
                 .bind(run_id),

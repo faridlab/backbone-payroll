@@ -35,9 +35,6 @@ use crate::domain::entity::CompensationChangeType;
 #[serde(rename_all = "camelCase")]
 pub struct CreateCompensationChangeDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
     #[serde(alias = "change_type")]
@@ -65,9 +62,6 @@ pub struct CreateCompensationChangeDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCompensationChangeDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
@@ -97,9 +91,6 @@ pub struct UpdateCompensationChangeDto {
 #[serde(rename_all = "camelCase")]
 pub struct PatchCompensationChangeDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "change_type")]
@@ -117,7 +108,7 @@ pub struct PatchCompensationChangeDto {
 impl PatchCompensationChangeDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.change_type.is_some() || self.new_amount.is_some() || self.effective_date.is_some() || self.reference_id.is_some() || self.note.is_some()
+        self.employee_id.is_some() || self.change_type.is_some() || self.new_amount.is_some() || self.effective_date.is_some() || self.reference_id.is_some() || self.note.is_some()
     }
 }
 
@@ -135,8 +126,6 @@ impl PatchCompensationChangeDto {
 pub struct CompensationChangeResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub employee_id: Uuid,
     pub change_type: CompensationChangeType,
@@ -201,9 +190,9 @@ impl CompensationChangeListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct CompensationChangeSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub change_type: CompensationChangeType,
+    pub new_amount: Option<Decimal>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -215,7 +204,6 @@ impl From<CompensationChange> for CompensationChangeResponseDto {
     fn from(entity: CompensationChange) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             change_type: entity.change_type,
             new_amount: entity.new_amount,
@@ -232,9 +220,9 @@ impl From<CompensationChange> for CompensationChangeSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             change_type: entity.change_type,
+            new_amount: entity.new_amount,
             created_at,
         }
     }
@@ -244,7 +232,6 @@ impl From<CreateCompensationChangeDto> for CompensationChange {
     fn from(dto: CreateCompensationChangeDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             employee_id: dto.employee_id,
             change_type: dto.change_type,
             new_amount: dto.new_amount,
@@ -260,7 +247,6 @@ impl From<&CompensationChange> for CompensationChangeResponseDto {
     fn from(entity: &CompensationChange) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             employee_id: entity.employee_id.clone(),
             change_type: entity.change_type.clone(),
             new_amount: entity.new_amount.clone(),
@@ -280,7 +266,6 @@ impl backbone_core::FromCreateDto<CreateCompensationChangeDto> for CompensationC
 
 impl backbone_core::ApplyUpdateDto<UpdateCompensationChangeDto> for CompensationChange {
     fn apply_update(mut self, dto: UpdateCompensationChangeDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.employee_id = dto.employee_id;
         self.change_type = dto.change_type;
         self.new_amount = dto.new_amount;

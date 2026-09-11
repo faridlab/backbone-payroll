@@ -50,7 +50,6 @@ impl std::ops::Deref for SalarySlipId {
 pub struct SalarySlip {
     pub id: Uuid,
     pub payroll_entry_id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub structure_id: Option<Uuid>,
     pub working_days: Decimal,
@@ -72,11 +71,10 @@ impl SalarySlip {
     }
 
     /// Create a new SalarySlip with required fields
-    pub fn new(payroll_entry_id: Uuid, company_id: Uuid, employee_id: Uuid, working_days: Decimal, unpaid_days: Decimal, gross_pay: Decimal, total_deductions: Decimal, net_pay: Decimal) -> Self {
+    pub fn new(payroll_entry_id: Uuid, employee_id: Uuid, working_days: Decimal, unpaid_days: Decimal, gross_pay: Decimal, total_deductions: Decimal, net_pay: Decimal) -> Self {
         Self {
             id: Uuid::new_v4(),
             payroll_entry_id,
-            company_id,
             employee_id,
             structure_id: None,
             working_days,
@@ -174,9 +172,6 @@ impl SalarySlip {
                 "payroll_entry_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.payroll_entry_id = v; }
                 }
-                "company_id" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
-                }
                 "employee_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.employee_id = v; }
                 }
@@ -259,16 +254,12 @@ impl backbone_orm::EntityRepoMeta for SalarySlip {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
         m.insert("payroll_entry_id".to_string(), "uuid".to_string());
-        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("employee_id".to_string(), "uuid".to_string());
         m.insert("structure_id".to_string(), "uuid".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
         &[]
-    }
-    fn company_field() -> Option<&'static str> {
-        Some("company_id")
     }
 }
 
@@ -279,7 +270,6 @@ impl backbone_orm::EntityRepoMeta for SalarySlip {
 #[derive(Debug, Clone, Default)]
 pub struct SalarySlipBuilder {
     payroll_entry_id: Option<Uuid>,
-    company_id: Option<Uuid>,
     employee_id: Option<Uuid>,
     structure_id: Option<Uuid>,
     working_days: Option<Decimal>,
@@ -295,12 +285,6 @@ impl SalarySlipBuilder {
     /// Set the payroll_entry_id field (required)
     pub fn payroll_entry_id(mut self, value: Uuid) -> Self {
         self.payroll_entry_id = Some(value);
-        self
-    }
-
-    /// Set the company_id field (required)
-    pub fn company_id(mut self, value: Uuid) -> Self {
-        self.company_id = Some(value);
         self
     }
 
@@ -363,13 +347,11 @@ impl SalarySlipBuilder {
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<SalarySlip, String> {
         let payroll_entry_id = self.payroll_entry_id.ok_or_else(|| "payroll_entry_id is required".to_string())?;
-        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let employee_id = self.employee_id.ok_or_else(|| "employee_id is required".to_string())?;
 
         Ok(SalarySlip {
             id: Uuid::new_v4(),
             payroll_entry_id,
-            company_id,
             employee_id,
             structure_id: self.structure_id,
             working_days: self.working_days.unwrap_or(Decimal::from(0)),

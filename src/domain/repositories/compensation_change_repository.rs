@@ -44,7 +44,6 @@ pub struct CompensationChangePaginatedResult {
 /// Filter parameters for list queries
 #[derive(Debug, Clone, Default)]
 pub struct CompensationChangeFilter {
-    pub company_id: Option<Uuid>,
     pub employee_id: Option<Uuid>,
     pub change_type: Option<CompensationChangeType>,
     pub reference_id: Option<Uuid>,
@@ -54,7 +53,7 @@ pub struct CompensationChangeFilter {
 impl CompensationChangeFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.company_id.is_some() || self.employee_id.is_some() || self.change_type.is_some() || self.reference_id.is_some() || self.note.is_some()
+        self.employee_id.is_some() || self.change_type.is_some() || self.reference_id.is_some() || self.note.is_some()
     }
 }
 

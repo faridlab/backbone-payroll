@@ -16,7 +16,10 @@ use uuid::Uuid;
 /// whatever it fronts) can dedup retries safely.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemittanceInstruction {
-    /// The company scope (stamped onto the payment for its own fence).
+    /// The legacy tenancy twin (ADR-0029) — the payment contract keeps the field for unstripped
+    /// consumers. The payroll tables hold no company column; the write path echoes the ambient
+    /// org scope's legacy company id, or nil when none is bound. It is stamped onto the payment
+    /// and into the idempotency key, but nothing in payroll keys a statement on it.
     pub company_id: Uuid,
     /// The posted run the payable came from (correlation id).
     pub run_id: Uuid,

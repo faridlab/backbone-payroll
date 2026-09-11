@@ -51,7 +51,6 @@ impl std::ops::Deref for PayrollEntryId {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct PayrollEntry {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub period_year: i32,
     pub period_month: i32,
     pub posting_date: Option<DateTime<Utc>>,
@@ -75,10 +74,9 @@ impl PayrollEntry {
     }
 
     /// Create a new PayrollEntry with required fields
-    pub fn new(company_id: Uuid, period_year: i32, period_month: i32, status: PayrollStatus, total_gross: Decimal, total_deductions: Decimal, total_net: Decimal) -> Self {
+    pub fn new(period_year: i32, period_month: i32, status: PayrollStatus, total_gross: Decimal, total_deductions: Decimal, total_net: Decimal) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id,
             period_year,
             period_month,
             posting_date: None,
@@ -192,9 +190,6 @@ impl PayrollEntry {
     pub fn apply_patch(&mut self, fields: std::collections::HashMap<String, serde_json::Value>) {
         for (key, value) in fields {
             match key.as_str() {
-                "company_id" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
-                }
                 "period_year" => {
                     if let Ok(v) = serde_json::from_value(value) { self.period_year = v; }
                 }
@@ -282,7 +277,6 @@ impl backbone_orm::EntityRepoMeta for PayrollEntry {
     fn column_types() -> std::collections::HashMap<String, String> {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
-        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("salary_expense_account_id".to_string(), "uuid".to_string());
         m.insert("salary_payable_account_id".to_string(), "uuid".to_string());
         m.insert("journal_id".to_string(), "uuid".to_string());
@@ -293,9 +287,6 @@ impl backbone_orm::EntityRepoMeta for PayrollEntry {
     fn search_fields() -> &'static [&'static str] {
         &[]
     }
-    fn company_field() -> Option<&'static str> {
-        Some("company_id")
-    }
 }
 
 /// Builder for PayrollEntry entity
@@ -304,7 +295,6 @@ impl backbone_orm::EntityRepoMeta for PayrollEntry {
 /// System fields (id, metadata, timestamps) are auto-initialized.
 #[derive(Debug, Clone, Default)]
 pub struct PayrollEntryBuilder {
-    company_id: Option<Uuid>,
     period_year: Option<i32>,
     period_month: Option<i32>,
     posting_date: Option<DateTime<Utc>>,
@@ -319,12 +309,6 @@ pub struct PayrollEntryBuilder {
 }
 
 impl PayrollEntryBuilder {
-    /// Set the company_id field (required)
-    pub fn company_id(mut self, value: Uuid) -> Self {
-        self.company_id = Some(value);
-        self
-    }
-
     /// Set the period_year field (required)
     pub fn period_year(mut self, value: i32) -> Self {
         self.period_year = Some(value);
@@ -395,13 +379,11 @@ impl PayrollEntryBuilder {
     ///
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<PayrollEntry, String> {
-        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let period_year = self.period_year.ok_or_else(|| "period_year is required".to_string())?;
         let period_month = self.period_month.ok_or_else(|| "period_month is required".to_string())?;
 
         Ok(PayrollEntry {
             id: Uuid::new_v4(),
-            company_id,
             period_year,
             period_month,
             posting_date: self.posting_date,

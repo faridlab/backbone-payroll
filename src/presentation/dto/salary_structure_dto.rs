@@ -33,9 +33,6 @@ use crate::domain::entity::SalaryStructureStatus;
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSalaryStructureDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "validation", validate(length(max = 140)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
@@ -55,9 +52,6 @@ pub struct CreateSalaryStructureDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSalaryStructureDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "validation", validate(length(max = 140)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
@@ -77,9 +71,6 @@ pub struct UpdateSalaryStructureDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct PatchSalaryStructureDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
     #[cfg_attr(feature = "validation", validate(length(max = 140)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -91,7 +82,7 @@ pub struct PatchSalaryStructureDto {
 impl PatchSalaryStructureDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.name.is_some() || self.status.is_some()
+        self.name.is_some() || self.status.is_some()
     }
 }
 
@@ -109,8 +100,6 @@ impl PatchSalaryStructureDto {
 pub struct SalaryStructureResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
     pub status: SalaryStructureStatus,
@@ -171,7 +160,6 @@ impl SalaryStructureListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct SalaryStructureSummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub name: String,
     pub status: SalaryStructureStatus,
     pub created_at: Option<DateTime<Utc>>,
@@ -185,7 +173,6 @@ impl From<SalaryStructure> for SalaryStructureResponseDto {
     fn from(entity: SalaryStructure) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             name: entity.name,
             status: entity.status,
             metadata: entity.metadata,
@@ -198,7 +185,6 @@ impl From<SalaryStructure> for SalaryStructureSummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             name: entity.name,
             status: entity.status,
             created_at,
@@ -210,7 +196,6 @@ impl From<CreateSalaryStructureDto> for SalaryStructure {
     fn from(dto: CreateSalaryStructureDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             name: dto.name,
             status: dto.status,
             metadata: AuditMetadata::default(),
@@ -222,7 +207,6 @@ impl From<&SalaryStructure> for SalaryStructureResponseDto {
     fn from(entity: &SalaryStructure) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             name: entity.name.clone(),
             status: entity.status.clone(),
             metadata: entity.metadata.clone(),
@@ -238,7 +222,6 @@ impl backbone_core::FromCreateDto<CreateSalaryStructureDto> for SalaryStructure 
 
 impl backbone_core::ApplyUpdateDto<UpdateSalaryStructureDto> for SalaryStructure {
     fn apply_update(mut self, dto: UpdateSalaryStructureDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.name = dto.name;
         self.status = dto.status;
         Ok(self)

@@ -38,6 +38,9 @@ pub struct PayrollPayable {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PayrollPosted {
     pub payroll_entry_id: Uuid,
+    /// The legacy tenancy twin (ADR-0029) — carried in the payload for unstripped consumers. The
+    /// payroll tables hold no company column; the write path echoes the ambient org scope's legacy
+    /// company id, or nil when none is bound. Nothing keys a statement on it.
     pub company_id: Uuid,
     pub journal_id: Uuid,
     pub post_id: Uuid,

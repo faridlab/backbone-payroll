@@ -19,9 +19,8 @@ fn earning(name: &str, amt: &str, acct: Uuid) -> NewComponent {
 }
 
 /// Build the standard structure: Gaji Pokok 10,000,000 + Tunjangan 2,000,000 = 12,000,000 gross.
-async fn standard_structure(svc: &PayrollWriteService, company: Uuid, expense: Uuid) -> Uuid {
+async fn standard_structure(svc: &PayrollWriteService, expense: Uuid) -> Uuid {
     svc.create_structure(NewStructure {
-        company_id: company,
         name: "Staff".into(),
         components: vec![
             earning("Gaji Pokok", "10000000", expense),
@@ -43,13 +42,12 @@ fn statutory(a: &PayrollAccounts) -> Vec<StatutoryLine> {
 #[tokio::test]
 async fn pgc1_full_month_net_pay() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
-    let structure = standard_structure(&svc, company, a.salary_expense).await;
+    let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
-        company_id: company, period_year: 2026, period_month: 7,
+        period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
 
@@ -83,13 +81,12 @@ async fn pgc1_full_month_net_pay() {
 #[tokio::test]
 async fn pgc2_unpaid_days_prorate_gross() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
-    let structure = standard_structure(&svc, company, a.salary_expense).await;
+    let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
-        company_id: company, period_year: 2026, period_month: 7,
+        period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
 
@@ -114,13 +111,12 @@ async fn pgc2_unpaid_days_prorate_gross() {
 #[tokio::test]
 async fn pgc3_run_rollup_and_deduction_grouping() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
-    let structure = standard_structure(&svc, company, a.salary_expense).await;
+    let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
-        company_id: company, period_year: 2026, period_month: 7,
+        period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
 
@@ -155,13 +151,12 @@ async fn pgc3_run_rollup_and_deduction_grouping() {
 #[tokio::test]
 async fn pgc4_post_is_idempotent() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
-    let structure = standard_structure(&svc, company, a.salary_expense).await;
+    let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
-        company_id: company, period_year: 2026, period_month: 7,
+        period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
@@ -186,13 +181,12 @@ async fn pgc4_post_is_idempotent() {
 #[tokio::test]
 async fn pgc5_payroll_posted_carries_payable_breakdown() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
-    let structure = standard_structure(&svc, company, a.salary_expense).await;
+    let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
-        company_id: company, period_year: 2026, period_month: 7,
+        period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
@@ -312,13 +306,12 @@ async fn pgc6_params_resolve_as_of_effective_from() {
 #[tokio::test]
 async fn pgc7_pre_effective_period_run_refuses_to_compute() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
-    let structure = standard_structure(&svc, company, a.salary_expense).await;
+    let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
-        company_id: company, period_year: 2021, period_month: 12, // before the 2022-01-01 seeds
+        period_year: 2021, period_month: 12, // before the 2022-01-01 seeds
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
 

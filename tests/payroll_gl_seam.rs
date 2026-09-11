@@ -11,16 +11,16 @@ use backbone_payroll::application::service::payroll_write_service::*;
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
-async fn posted_run(pool: &sqlx::PgPool, svc: &PayrollWriteService, a: &PayrollAccounts, company: Uuid) -> Uuid {
+async fn posted_run(pool: &sqlx::PgPool, svc: &PayrollWriteService, a: &PayrollAccounts) -> Uuid {
     let structure = svc.create_structure(NewStructure {
-        company_id: company, name: "Staff".into(),
+        name: "Staff".into(),
         components: vec![NewComponent {
             name: "Gaji Pokok".into(), component_type: "earning".into(),
             amount: dec("10000000"), gl_account_id: a.salary_expense,
         }],
     }).await.unwrap();
     let run = svc.create_payroll_entry(NewPayrollEntry {
-        company_id: company, period_year: 2026, period_month: 7,
+        period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
@@ -43,12 +43,11 @@ async fn posted_run(pool: &sqlx::PgPool, svc: &PayrollWriteService, a: &PayrollA
 #[tokio::test]
 async fn pgseam1_salary_journal_lands_balanced_in_real_ledger() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
     let gl = GlAdapter::new(pool.clone());
 
-    let run = posted_run(&pool, &svc, &a, company).await;
+    let run = posted_run(&pool, &svc, &a).await;
     let out = svc.post_payroll_entry(run, today(), &gl, &LoggingSink).await.expect("real accounting accepts payroll post");
     assert!(!out.already);
 
@@ -69,12 +68,11 @@ async fn pgseam1_salary_journal_lands_balanced_in_real_ledger() {
 #[tokio::test]
 async fn pgseam2_repost_reuses_one_journal() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
     let gl = GlAdapter::new(pool.clone());
 
-    let run = posted_run(&pool, &svc, &a, company).await;
+    let run = posted_run(&pool, &svc, &a).await;
     let first = svc.post_payroll_entry(run, today(), &gl, &LoggingSink).await.unwrap();
     let second = svc.post_payroll_entry(run, today(), &gl, &LoggingSink).await.unwrap();
 

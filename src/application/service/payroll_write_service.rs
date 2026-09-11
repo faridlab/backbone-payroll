@@ -8,7 +8,7 @@
 //! the Indonesia statutory amounts (BPJS, PPh 21) are supplied by the deferred overlay. Money is IDR,
 //! 2dp, half-away-from-zero.
 
-use backbone_orm::company_scope;
+use backbone_orm::org_scope;
 use chrono::{Datelike, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy};
 use sqlx::PgPool;
@@ -31,6 +31,17 @@ use super::statutory_calcs::{self, Pph21Method, PtkpTier};
 
 fn money(v: Decimal) -> Decimal {
     v.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
+}
+
+/// The legacy tenancy twin echo (ADR-0029): outbound contract shapes (the GL post envelope, the
+/// `PayrollPosted` event, the remittance instruction) carry a `company_id` field for unstripped
+/// consumers, but the stripped tables hold no company column. Echo the ambient org scope's legacy
+/// company id when the composing service bound one; nil otherwise. Nothing keys a statement on it,
+/// and an undecorated deployment is unfenced by design.
+fn legacy_company_echo() -> Uuid {
+    org_scope::current_org_scope()
+        .and_then(|s| s.legacy_company_id())
+        .unwrap_or(Uuid::nil())
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -124,13 +135,11 @@ pub struct NewComponent {
     pub gl_account_id: Uuid,
 }
 pub struct NewStructure {
-    pub company_id: Uuid,
     pub name: String,
     pub components: Vec<NewComponent>,
 }
 
 pub struct NewPayrollEntry {
-    pub company_id: Uuid,
     pub period_year: i32,
     pub period_month: i32,
     pub salary_expense_account_id: Uuid,
@@ -313,13 +322,15 @@ impl PayrollWriteService {
             return Err(PayrollError::Invalid("a structure needs at least one component".into()));
         }
         let id = Uuid::new_v4();
-        // RLS scope (ADR-0008): company is on the DTO — bind it onto our own transaction so the
-        // structure + component inserts pass the `app.company_id` WITH CHECK fence.
+        // Tenancy (ADR-0029): the module is tenant-agnostic. Relay the ambient org request scope
+        // onto our own transaction so the structure + component inserts pass the composing
+        // service's tenancy RLS fence; an undecorated deployment is unfenced by design.
         let mut tx = self.pool.begin().await?;
-        company_scope::bind_company_on(&mut tx, s.company_id).await?;
+        if let Some(scope) = org_scope::current_org_scope() {
+            org_scope::bind_org_scope_on(&mut tx, &scope).await?;
+        }
         self.structures.insert_structure(&mut tx, &NewStructureRow {
             id,
-            company_id: s.company_id,
             name: &s.name,
         }).await?;
         for c in &s.components {
@@ -329,7 +340,6 @@ impl PayrollWriteService {
             self.components.insert_component(&mut tx, &NewComponentRow {
                 id: Uuid::new_v4(),
                 structure_id: id,
-                company_id: s.company_id,
                 name: &c.name,
                 component_type: &c.component_type,
                 amount: money(c.amount),
@@ -340,29 +350,30 @@ impl PayrollWriteService {
         Ok(id)
     }
 
-    /// Open a payroll run for a company/period (draft). Unique per (company, year, month).
+    /// Open a payroll run for a period (draft). Unique per (org unit, year, month) once the
+    /// composing service's tenancy decorator has re-declared the run unique org-scoped.
     pub async fn create_payroll_entry(&self, e: NewPayrollEntry) -> Result<Uuid, PayrollError> {
         if !(1..=12).contains(&e.period_month) {
             return Err(PayrollError::Invalid("period_month must be 1..12".into()));
         }
         let id = Uuid::new_v4();
-        // RLS scope (ADR-0008): company is on the DTO — scope the insert so it passes the WITH CHECK fence.
-        let r = company_scope::with_company_scope(
-            Some(e.company_id),
-            self.entries.insert_entry(&self.pool, &NewPayrollEntryRow {
+        // Tenancy (ADR-0029): the insert rides the ambient org request scope — under HTTP the
+        // request-dedicated connection already carries it; an undecorated deployment is unfenced
+        // by design.
+        let r = self
+            .entries
+            .insert_entry(&self.pool, &NewPayrollEntryRow {
                 id,
-                company_id: e.company_id,
                 period_year: e.period_year,
                 period_month: e.period_month,
                 salary_expense_account_id: e.salary_expense_account_id,
                 salary_payable_account_id: e.salary_payable_account_id,
-            }),
-        )
-        .await;
+            })
+            .await;
         match r {
             Ok(_) => Ok(id),
             Err(err) if err.as_database_error().map(|d| d.is_unique_violation()).unwrap_or(false) =>
-                Err(PayrollError::Invalid("a payroll run already exists for this company/period".into())),
+                Err(PayrollError::Invalid("a payroll run already exists for this period".into())),
             Err(err) => Err(err.into()),
         }
     }
@@ -371,16 +382,14 @@ impl PayrollWriteService {
     /// (`gross = Σ earning · (working − unpaid)/working`); fixed + supplied statutory deductions subtract.
     /// `net = gross − deductions` and must be non-negative.
     pub async fn add_salary_slip(&self, run_id: Uuid, s: NewSalarySlip) -> Result<Uuid, PayrollError> {
-        // RLS scope (ADR-0008), ID-only pattern: identified by the run id alone — no company argument to
-        // scope from up front. The lookup rides the request-dedicated connection (which carries the
-        // caller's `app.company_id`), so another company's run simply isn't found. Having read the run,
-        // we bind its company onto our own transaction below.
-        let run = self.entries.find_scope_by_id(&self.pool, run_id).await?
+        // Tenancy (ADR-0029), ID-only pattern: identified by the run id alone. The lookup rides the
+        // ambient org request scope — under HTTP the request-dedicated connection carries it, so
+        // another unit's run simply isn't found; an undecorated deployment is unfenced by design.
+        let run = self.entries.find_state_by_id(&self.pool, run_id).await?
             .ok_or(PayrollError::NotFound("payroll run"))?;
         if run.status != "draft" {
             return Err(PayrollError::InvalidState("run is not draft"));
         }
-        let company_id = run.company_id;
         if s.working_days <= Decimal::ZERO {
             return Err(PayrollError::Invalid("working_days must be positive".into()));
         }
@@ -392,11 +401,7 @@ impl PayrollWriteService {
         let factor = (s.working_days - unpaid) / s.working_days; // proration for unpaid days
 
         // Load the structure components.
-        let comps = company_scope::with_company_scope(
-            Some(company_id),
-            self.components.list_by_structure(&self.pool, s.structure_id),
-        )
-        .await?;
+        let comps = self.components.list_by_structure(&self.pool, s.structure_id).await?;
         if comps.is_empty() {
             return Err(PayrollError::Invalid("salary structure has no components".into()));
         }
@@ -446,12 +451,15 @@ impl PayrollWriteService {
 
         let slip_id = Uuid::new_v4();
         let mut tx = self.pool.begin().await?;
-        // The run's own company, read above — bind it so the slip + line inserts pass the WITH CHECK fence.
-        company_scope::bind_company_on(&mut tx, company_id).await?;
+        // Relay the ambient org request scope onto our own transaction so the slip + line inserts
+        // pass the composing service's tenancy RLS fence (ADR-0029); an undecorated deployment is
+        // unfenced by design.
+        if let Some(scope) = org_scope::current_org_scope() {
+            org_scope::bind_org_scope_on(&mut tx, &scope).await?;
+        }
         let ins = self.slips.insert_slip(&mut tx, &NewSalarySlipRow {
             id: slip_id,
             payroll_entry_id: run_id,
-            company_id,
             employee_id: s.employee_id,
             structure_id: s.structure_id,
             working_days: s.working_days,
@@ -471,7 +479,6 @@ impl PayrollWriteService {
             self.slip_lines.insert_line(&mut tx, &NewSlipLineRow {
                 id: Uuid::new_v4(),
                 salary_slip_id: slip_id,
-                company_id,
                 name: &l.name,
                 component_type: &l.ct,
                 is_statutory: l.is_statutory,
@@ -499,7 +506,6 @@ impl PayrollWriteService {
         if run.status != "draft" {
             return Err(PayrollError::InvalidState("run is not draft"));
         }
-        let company_id = run.company_id;
         let month = u32::try_from(run.period_month)
             .map_err(|_| PayrollError::Invalid("period_month is not a valid month".into()))?;
         let period_start = NaiveDate::from_ymd_opt(run.period_year, month, 1)
@@ -517,17 +523,13 @@ impl PayrollWriteService {
         // Employee facts (PTKP/NPWP/TER/tenure anchor) — None means no such live employee in scope.
         let inputs = self
             .employee_inputs
-            .statutory_inputs(company_id, r.employee_id)
+            .statutory_inputs(r.employee_id)
             .await?
             .ok_or(PayrollError::NotFound("employee statutory inputs"))?;
 
         // Statutory base: the structure's monthly earning total (un-prorated — the salary being
         // paid; proration is a slip-line concern the earnings factor already applies).
-        let comps = company_scope::with_company_scope(
-            Some(company_id),
-            self.components.list_by_structure(&self.pool, r.structure_id),
-        )
-        .await?;
+        let comps = self.components.list_by_structure(&self.pool, r.structure_id).await?;
         let gross_monthly: Decimal = comps
             .iter()
             .filter(|c| c.component_type == "earning")
@@ -542,7 +544,7 @@ impl PayrollWriteService {
         // summed — landing as an ordinary earning line so it flows through the balanced journal.
         let stretches = self
             .overtime_inputs
-            .overtime_stretches(company_id, r.employee_id, period_start, period_end)
+            .overtime_stretches(r.employee_id, period_start, period_end)
             .await?;
         let overtime_hours: Decimal = stretches.iter().map(|(_, h)| *h).sum();
         let salary_expense = run.salary_expense_account_id
@@ -626,9 +628,9 @@ impl PayrollWriteService {
 
     /// Roll the run's slips up into its totals and move `draft → processed` (ready to post).
     pub async fn process_payroll_entry(&self, run_id: Uuid) -> Result<(), PayrollError> {
-        // RLS scope (ADR-0008), ID-only pattern: the run id alone identifies the work, so the reads and
-        // the transition ride the request-dedicated connection's `app.company_id`. An event-driven caller
-        // must wrap this in `with_company_scope(Some(event.company_id))` or the reads fail closed.
+        // Tenancy (ADR-0029), ID-only pattern: the run id alone identifies the work, so the reads
+        // and the transition ride the ambient org request scope — under HTTP the request-dedicated
+        // connection carries it; an undecorated deployment is unfenced by design.
         let totals = self.slips.sum_totals_by_run(&self.pool, run_id).await?;
         if totals.count == 0 {
             return Err(PayrollError::Invalid("a run needs at least one salary slip".into()));
@@ -652,9 +654,9 @@ impl PayrollWriteService {
         sink: &dyn GlPostSink,
         events: &dyn PayrollEventSink,
     ) -> Result<PostOutcome, PayrollError> {
-        // RLS scope (ADR-0008), ID-only pattern: identified by the run id alone. Under HTTP the
-        // request-dedicated connection carries the scope. Driven by an EVENT, the caller must wrap this
-        // in `with_company_scope(Some(event.company_id))` — otherwise these reads fail closed.
+        // Tenancy (ADR-0029), ID-only pattern: identified by the run id alone. The reads ride the
+        // ambient org request scope — under HTTP the request-dedicated connection carries it; an
+        // undecorated deployment is unfenced by design.
         let run = self.entries.find_for_posting(&self.pool, run_id).await?
             .ok_or(PayrollError::NotFound("payroll run"))?;
         let status = run.status.as_str();
@@ -665,11 +667,11 @@ impl PayrollWriteService {
             // At-least-once delivery: a retried post re-publishes (the first attempt surfaced a
             // publish failure as an error even though its row landed). Consumers dedup by record
             // id, so a re-stage after a partial delivery is absorbed, never duplicated downstream.
-            let payables = self.payables_for_run(run_id, run.company_id).await?;
+            let payables = self.payables_for_run(run_id).await?;
             events
                 .publish(&PayrollEvent::PayrollPosted(PayrollPosted {
                     payroll_entry_id: run_id,
-                    company_id: run.company_id,
+                    company_id: legacy_company_echo(),
                     journal_id: j,
                     post_id: p,
                     total_gross: run.total_gross,
@@ -686,7 +688,6 @@ impl PayrollWriteService {
         if status != "processed" {
             return Err(PayrollError::InvalidState("run is not processed"));
         }
-        let company_id = run.company_id;
         let total_gross = run.total_gross;
         let total_deductions = run.total_deductions;
         let salary_expense: Uuid = run.salary_expense_account_id
@@ -696,11 +697,7 @@ impl PayrollWriteService {
 
         // Deductions grouped by their payable account across every slip, carrying whether the account is
         // a statutory payable (routes the settlement consumer's remittance to the right authority).
-        let ded_rows = company_scope::with_company_scope(
-            Some(company_id),
-            self.slip_lines.group_deductions_by_account(&self.pool, run_id),
-        )
-        .await?;
+        let ded_rows = self.slip_lines.group_deductions_by_account(&self.pool, run_id).await?;
 
         // Build the balanced posting: Dr Expense (gross) · Cr Payable (net) · Cr each deduction account.
         // The same grouping becomes the payable breakdown on PayrollPosted (settlement's input).
@@ -719,7 +716,8 @@ impl PayrollWriteService {
         }
         let env = AccountingPostEnvelope {
             idempotency_key: format!("payroll:{run_id}"),
-            company_id, branch_id: None, source_type: "payroll".into(), source_id: run_id,
+            company_id: legacy_company_echo(),
+            branch_id: None, source_type: "payroll".into(), source_id: run_id,
             source_reference: None, posting_date, currency: "IDR".into(), posting_type: "original".into(),
             description: Some("Payroll run".into()), lines,
         };
@@ -735,23 +733,18 @@ impl PayrollWriteService {
                 .ok_or(PayrollError::Invalid("posting date is not a real calendar date".into()))?,
             chrono::Utc,
         );
-        let moved = company_scope::with_company_scope(
-            Some(company_id),
-            self.entries.mark_posted(&self.pool, run_id, posted_at, ack.journal_id, ack.post_id),
-        )
-        .await?;
+        let moved = self
+            .entries
+            .mark_posted(&self.pool, run_id, posted_at, ack.journal_id, ack.post_id)
+            .await?;
         if moved != 1 {
             // Raced — the winner posted; return its journal.
-            let j: Uuid = company_scope::with_company_scope(
-                Some(company_id),
-                self.entries.fetch_journal_id(&self.pool, run_id),
-            )
-            .await?;
+            let j: Uuid = self.entries.fetch_journal_id(&self.pool, run_id).await?;
             return Ok(PostOutcome { payroll_entry_id: run_id, journal_id: j, post_id: ack.post_id, total_net, already: true });
         }
         events
             .publish(&PayrollEvent::PayrollPosted(PayrollPosted {
-                payroll_entry_id: run_id, company_id, journal_id: ack.journal_id, post_id: ack.post_id,
+                payroll_entry_id: run_id, company_id: legacy_company_echo(), journal_id: ack.journal_id, post_id: ack.post_id,
                 total_gross, total_deductions, total_net,
                 salary_payable_account_id: salary_payable, payables,
             }))
@@ -763,12 +756,8 @@ impl PayrollWriteService {
     /// The run's deduction payables, grouped by account exactly as the post verb grouped them —
     /// the shared source for the already-posted re-publish and the remit verb, so both describe
     /// the SAME obligations the posted journal credited.
-    async fn payables_for_run(&self, run_id: Uuid, company_id: Uuid) -> Result<Vec<PayrollPayable>, PayrollError> {
-        let ded_rows = company_scope::with_company_scope(
-            Some(company_id),
-            self.slip_lines.group_deductions_by_account(&self.pool, run_id),
-        )
-        .await?;
+    async fn payables_for_run(&self, run_id: Uuid) -> Result<Vec<PayrollPayable>, PayrollError> {
+        let ded_rows = self.slip_lines.group_deductions_by_account(&self.pool, run_id).await?;
         Ok(ded_rows
             .into_iter()
             .filter(|r| r.amount > Decimal::ZERO)
@@ -778,24 +767,26 @@ impl PayrollWriteService {
 
     /// Remit a posted run's payables — one instruction per deduction account, each carrying the
     /// stable `payroll_remittance:{company}:{run}:{account}` idempotency key so retries dedup at
-    /// the sink. Requires `posted` (an unposted run has no settled obligations to pay). Payee
-    /// resolution is the composing host's adapter, never payroll's.
+    /// the sink (the company segment is the legacy tenancy twin echo, ADR-0029 — stable per unit
+    /// under a composing service, nil undecorated). Requires `posted` (an unposted run has no
+    /// settled obligations to pay). Payee resolution is the composing host's adapter, never
+    /// payroll's.
     pub async fn remit_payroll_entry(
         &self,
         run_id: Uuid,
         sink: &dyn RemittanceSink,
     ) -> Result<RemitOutcome, PayrollError> {
-        // RLS scope (ADR-0008), ID-only pattern — see post_payroll_entry.
+        // Tenancy (ADR-0029), ID-only pattern — see post_payroll_entry.
         let run = self.entries.find_for_posting(&self.pool, run_id).await?
             .ok_or(PayrollError::NotFound("payroll run"))?;
         if run.status.as_str() != "posted" {
             return Err(PayrollError::InvalidState("run is not posted"));
         }
-        let payables = self.payables_for_run(run_id, run.company_id).await?;
+        let payables = self.payables_for_run(run_id).await?;
         let mut remitted = Vec::with_capacity(payables.len());
         for p in payables {
             let instruction =
-                RemittanceInstruction::new(run.company_id, run_id, p.gl_account_id, p.amount, p.statutory);
+                RemittanceInstruction::new(legacy_company_echo(), run_id, p.gl_account_id, p.amount, p.statutory);
             let ack: RemitAck = sink.remit(&instruction).await?;
             remitted.push((instruction, ack));
         }

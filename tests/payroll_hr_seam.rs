@@ -50,6 +50,19 @@ use chrono::{Datelike, NaiveDate};
 use rust_decimal::{Decimal, RoundingStrategy};
 use uuid::Uuid;
 
+/// Drive a scope-requiring seam inside the org request scope the composing service always binds
+/// (ADR-0029). Timeoff's approve draws down the balance on the legacy company twin sourced from
+/// the ambient scope — absent → fail-closed NoCompanyScope, by design.
+async fn in_org_scope<R>(pool: &sqlx::PgPool, f: impl std::future::Future<Output = R>) -> R {
+    backbone_orm::org_scope::with_org_request_scope(
+        pool,
+        backbone_orm::org_scope::OrgScope::for_company_unit(Uuid::new_v4()),
+        f,
+    )
+    .await
+    .expect("bind org request scope")
+}
+
 // PHRSEAM-1 — UNPAID leave flows into payroll as prorated gross, derived from the three decomposed
 // read-ports. An employee with a 12,000,000 structure takes 2 UNPAID days on two consecutive working
 // days of a 23-working-day July 2026 (Mon 2026-07-13 + Tue 2026-07-14); attendance is seeded on every
@@ -59,6 +72,9 @@ use uuid::Uuid;
 #[tokio::test]
 async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
     let pool = pool().await;
+    // The legacy company id (ADR-0029): calendar's and attendance's read-ports still accept it —
+    // calendar resolves a company-kind org unit's id to its legacy company id and attendance
+    // accepts-and-ignores it for unstripped consumers. Nothing payroll writes keys on it.
     let company = Uuid::new_v4();
 
     // ── Wire the three read-port modules. The query-port traits are implemented on the `Module`
@@ -94,7 +110,6 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
     // ── 1. Onboard one employee (via backbone-employee) + an employment row.
     let emp = employee_svc
         .create(CreateEmployeeDto {
-            company_id: company,
             employee_number: format!("E-{}", &Uuid::new_v4().to_string()[..8]),
             user_id: None,
             first_name: "Budi".into(),
@@ -113,7 +128,6 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .expect("create employee");
     let _employment = employment_svc
         .create(CreateEmploymentDto {
-            company_id: company,
             employee_id: emp.id,
             employment_status: Default::default(),
             join_date: NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
@@ -139,7 +153,6 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
     // Unpaid leave type (is_paid=false), allocate 30d for 2026, request 2 days pending.
     let unpaid_type = ttype_svc
         .create(CreateTimeoffTypeDto {
-            company_id: company,
             name: "Cuti Tanpa Gaji".into(),
             code: None,
             is_paid: false,
@@ -149,7 +162,6 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .expect("create timeoff type");
     let _balance = tbalance_svc
         .create(CreateTimeoffBalanceDto {
-            company_id: company,
             timeoff_type_id: unpaid_type.id,
             employee_id: emp.id,
             period: "2026".into(),
@@ -166,7 +178,6 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .expect("allocate timeoff balance");
     let request = trequest_svc
         .create(CreateTimeoffRequestDto {
-            company_id: company,
             timeoff_type_id: unpaid_type.id,
             employee_id: emp.id,
             date_start: leave_start,
@@ -180,10 +191,13 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .await
         .expect("create timeoff request");
     // Approve → draws down the balance in the same tx as pending→approved (gated so used ≤ allocated).
-    TimeoffRequestWriteService::new(pool.clone())
-        .approve_request(request.id, None)
-        .await
-        .expect("approve timeoff request");
+    in_org_scope(&pool, async {
+        TimeoffRequestWriteService::new(pool.clone())
+            .approve_request(request.id, None)
+            .await
+            .expect("approve timeoff request");
+    })
+    .await;
 
     // ── 3. Seed attendance on every OTHER working day. This is the key semantic point: the new
     //    formula uses DERIVED absence (no attendance row on a working day = absent/unpaid), so the
@@ -196,7 +210,6 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         if working_day && !on_leave {
             attendance_svc
                 .create(CreateAttendanceDto {
-                    company_id: company,
                     employee_id: emp.id,
                     date: cursor,
                     schedule: None,
@@ -218,7 +231,7 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .await
         .expect("present_days");
     let paid_leave = timeoff
-        .paid_leave_days(company, emp.id, from, to)
+        .paid_leave_days(emp.id, from, to)
         .await
         .expect("paid_leave_days");
     let unpaid_days =
@@ -231,11 +244,10 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
 
     // ── 5. Drive payroll exactly as the seam contract does, prorating gross by the DERIVED
     //    unpaid_days. `working_days` is the calendar's actual count (23), not a hardcoded 22.
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = pay::PayrollWriteService::new(pool.clone());
     let structure = svc
         .create_structure(pay::NewStructure {
-            company_id: company,
             name: "Staff".into(),
             components: vec![pay::NewComponent {
                 name: "Gaji Pokok".into(),
@@ -248,7 +260,6 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .unwrap();
     let run = svc
         .create_payroll_entry(pay::NewPayrollEntry {
-            company_id: company,
             period_year: 2026,
             period_month: 7,
             salary_expense_account_id: a.salary_expense,
@@ -311,7 +322,6 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
 #[tokio::test]
 async fn phrseam2_statutory_drives_indonesian_net_pay() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
 
     // ── Employee module (the read-port host). Its query-port trait is impl'd on the Module itself.
     use backbone_employee::exports::EmployeeQueryService;
@@ -333,7 +343,6 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
     // ── 1. Onboard the employee + an employment row (joined 2020-01-01 → ≥12mo tenure → full THR).
     let emp = employee_svc
         .create(CreateEmployeeDto {
-            company_id: company,
             employee_number: format!("E-{}", &Uuid::new_v4().to_string()[..8]),
             user_id: None,
             first_name: "Siti".into(),
@@ -353,7 +362,6 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
     let join_date = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
     let _employment = employment_svc
         .create(CreateEmploymentDto {
-            company_id: company,
             employee_id: emp.id,
             employment_status: Default::default(),
             join_date,
@@ -370,7 +378,6 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
     // ── 2. Tax row WITH an NPWP (has_npwp=true), no ptkp_override (PTKP derives to TK0: no family).
     let _tax = tax_svc
         .create(CreateEmployeeTaxDto {
-            company_id: company,
             employee_id: emp.id,
             npwp_number: Some(npwp()),
             ptkp_override: None,
@@ -387,7 +394,6 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
     // ── 3. BPJS row (Kesehatan family count = 1 — informational for the employee share).
     let _bpjs = bpjs_svc
         .create(CreateEmployeeBpjsDto {
-            company_id: company,
             employee_id: emp.id,
             bpjs_ketenagakerjaan_number: None,
             npp_bpjs_ketenagakerjaan: None,
@@ -400,16 +406,14 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
         .await
         .expect("create employee bpjs");
 
-    // ── 4. Read the statutory bundle from the employee module. The port's read is RLS task-local
-    //    scoped (it queries by employee_id alone), so wrap it in the company scope — correct for a
-    //    production deployment and a harmless no-op when the test role bypasses RLS.
+    // ── 4. Read the statutory bundle from the employee module. The port's read is ID-only: both
+    //    modules are tenant-agnostic (ADR-0029), so the read queries by employee id alone and org
+    //    isolation is the composing service's tenancy fence, not the module's.
     use backbone_employee::exports::StatutoryInputs;
-    let inputs: StatutoryInputs = backbone_orm::company_scope::with_company_scope(
-        Some(company),
-        async { employee_module.statutory_inputs(emp.id).await },
-    )
-    .await
-    .expect("statutory_inputs read-port");
+    let inputs: StatutoryInputs = employee_module
+        .statutory_inputs(emp.id)
+        .await
+        .expect("statutory_inputs read-port");
 
     assert_eq!(
         inputs.ptkp.to_string(),
@@ -450,11 +454,10 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
     //    StatutoryComponent to a StatutoryLine by attaching the GL account (payable for deductions,
     //    expense for the THR earning — the GL post debits salary_expense for the whole gross, so the
     //    earning line's account is not load-bearing for the journal).
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = pay::PayrollWriteService::new(pool.clone());
     let structure = svc
         .create_structure(pay::NewStructure {
-            company_id: company,
             name: "Staff".into(),
             components: vec![pay::NewComponent {
                 name: "Gaji Pokok".into(),
@@ -467,7 +470,6 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
         .unwrap();
     let run = svc
         .create_payroll_entry(pay::NewPayrollEntry {
-            company_id: company,
             period_year: 2026,
             period_month: 7,
             salary_expense_account_id: a.salary_expense,
@@ -575,14 +577,12 @@ async fn joined_this_month(
     employee_svc: &EmployeeService,
     employment_svc: &EmploymentService,
     tax_svc: &EmployeeTaxService,
-    company: Uuid,
     name: &str,
     has_npwp: bool,
     ter: Option<backbone_employee::TerCategory>,
 ) -> Uuid {
     let emp = employee_svc
         .create(CreateEmployeeDto {
-            company_id: company,
             employee_number: format!("E-{}", &Uuid::new_v4().to_string()[..8]),
             user_id: None,
             first_name: name.into(),
@@ -601,7 +601,6 @@ async fn joined_this_month(
         .expect("create employee");
     employment_svc
         .create(CreateEmploymentDto {
-            company_id: company,
             employee_id: emp.id,
             employment_status: Default::default(),
             join_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
@@ -616,7 +615,6 @@ async fn joined_this_month(
         .expect("create employment");
     tax_svc
         .create(CreateEmployeeTaxDto {
-            company_id: company,
             employee_id: emp.id,
             npwp_number: has_npwp.then(npwp),
             ptkp_override: None,   // no family → derives TK0
@@ -635,12 +633,10 @@ async fn joined_this_month(
 /// One-earning structure of `amount` (the whole gross — isolates what the orchestrator computes).
 async fn flat_structure(
     svc: &pay::PayrollWriteService,
-    company: Uuid,
     expense: Uuid,
     amount: Decimal,
 ) -> Uuid {
     svc.create_structure(pay::NewStructure {
-        company_id: company,
         name: "Flat".into(),
         components: vec![pay::NewComponent {
             name: "Gaji Pokok".into(),
@@ -676,8 +672,6 @@ fn computed_accounts(a: &PayrollAccounts) -> pay::StatutoryAccounts {
 #[tokio::test]
 async fn phrseam3_overtime_comes_from_attendance_time_debt() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-
     let employee_svc =
         EmployeeService::with_repository(Arc::new(EmployeeRepository::new(pool.clone())));
     let employment_svc =
@@ -689,7 +683,7 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
 
     let emp = joined_this_month(
         &employee_svc, &employment_svc, &tax_svc,
-        company, "Agus", true, None,
+        "Agus", true, None,
     )
     .await;
 
@@ -705,7 +699,6 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
     for day in overtime_days {
         attendance_svc
             .create(CreateAttendanceDto {
-                company_id: company,
                 employee_id: emp,
                 date: day,
                 schedule: None,
@@ -720,7 +713,6 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
     // One day OUTSIDE the period (August) must not leak into July's slip.
     attendance_svc
         .create(CreateAttendanceDto {
-            company_id: company,
             employee_id: emp,
             date: NaiveDate::from_ymd_opt(2026, 8, 3).unwrap(),
             schedule: None,
@@ -732,12 +724,11 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
         .await
         .expect("seed out-of-period attendance");
 
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = pay::PayrollWriteService::new(pool.clone());
-    let structure = flat_structure(&svc, company, a.salary_expense, dec("8700000")).await;
+    let structure = flat_structure(&svc, a.salary_expense, dec("8700000")).await;
     let run = svc
         .create_payroll_entry(pay::NewPayrollEntry {
-            company_id: company,
             period_year: 2026,
             period_month: 7,
             salary_expense_account_id: a.salary_expense,
@@ -800,8 +791,6 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
 #[tokio::test]
 async fn phrseam4_computed_slip_dispatches_on_ter_category() {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-
     let employee_svc =
         EmployeeService::with_repository(Arc::new(EmployeeRepository::new(pool.clone())));
     let employment_svc =
@@ -811,27 +800,26 @@ async fn phrseam4_computed_slip_dispatches_on_ter_category() {
 
     let a_tera = joined_this_month(
         &employee_svc, &employment_svc, &tax_svc,
-        company, "Rina", true, Some(backbone_employee::TerCategory::TerA),
+        "Rina", true, Some(backbone_employee::TerCategory::TerA),
     )
     .await;
     let b_tera_nonpwp = joined_this_month(
         &employee_svc, &employment_svc, &tax_svc,
-        company, "Dewi", false, Some(backbone_employee::TerCategory::TerA),
+        "Dewi", false, Some(backbone_employee::TerCategory::TerA),
     )
     .await;
     let c_brackets = joined_this_month(
         &employee_svc, &employment_svc, &tax_svc,
-        company, "Budi", true, None,
+        "Budi", true, None,
     )
     .await;
 
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = pay::PayrollWriteService::new(pool.clone());
-    let structure_10m = flat_structure(&svc, company, a.salary_expense, dec("10000000")).await;
-    let structure_12m = flat_structure(&svc, company, a.salary_expense, dec("12000000")).await;
+    let structure_10m = flat_structure(&svc, a.salary_expense, dec("10000000")).await;
+    let structure_12m = flat_structure(&svc, a.salary_expense, dec("12000000")).await;
     let run = svc
         .create_payroll_entry(pay::NewPayrollEntry {
-            company_id: company,
             period_year: 2026,
             period_month: 7,
             salary_expense_account_id: a.salary_expense,

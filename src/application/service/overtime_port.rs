@@ -26,7 +26,6 @@ pub trait OvertimeInputs: Send + Sync {
     /// none — an ABSENCE of overtime is normal and must not error; only infrastructure failures do.
     async fn overtime_stretches(
         &self,
-        company_id: Uuid,
         employee_id: Uuid,
         from: NaiveDate,
         to: NaiveDate,
@@ -35,9 +34,9 @@ pub trait OvertimeInputs: Send + Sync {
 
 /// Default pool-backed [`OvertimeInputs`] — the same read attendance exports
 /// (`SUM((time_debt->>'overtime_minutes')::numeric)/60` over live daily rollups, grouped by date),
-/// expressed here as plain SQL for standalone use. Company-scoped by predicate (attendance's
-/// rollup table is fenced); the caller is expected to run inside a request/company scope or bind
-/// explicitly.
+/// expressed here as plain SQL for standalone use. Both modules are tenant-agnostic (ADR-0029):
+/// the attendance rollup table carries no company column; the read is org-scoped only by the
+/// composing service's tenancy RLS fence.
 pub struct PoolOvertimeInputs {
     pool: PgPool,
 }
@@ -52,7 +51,6 @@ impl PoolOvertimeInputs {
 impl OvertimeInputs for PoolOvertimeInputs {
     async fn overtime_stretches(
         &self,
-        company_id: Uuid,
         employee_id: Uuid,
         from: NaiveDate,
         to: NaiveDate,
@@ -61,13 +59,11 @@ impl OvertimeInputs for PoolOvertimeInputs {
             r#"SELECT date,
                       GREATEST(SUM((time_debt->>'overtime_minutes')::numeric) / 60, 0)
                FROM attendance.attendances
-               WHERE company_id = $1
-                 AND employee_id = $2
-                 AND date BETWEEN $3 AND $4
+               WHERE employee_id = $1
+                 AND date BETWEEN $2 AND $3
                  AND (metadata->>'deleted_at') IS NULL
                GROUP BY date"#,
         )
-        .bind(company_id)
         .bind(employee_id)
         .bind(from)
         .bind(to)

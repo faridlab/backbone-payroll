@@ -90,10 +90,12 @@ impl OnboardingEnrollInputs for PoolOnboardingEnrollInputs {
         // the latest non-deleted employee row (the metadata->>'deleted_at' audit column the framework
         // stamps). NULL/0 → None → the handler claims-but-skips.
         //
-        // Company-scoped (ADR-0008): the employee master sits behind the strict fence, so this runs
-        // through `fetch_optional_scoped` and the CALLER binds the event's company around the read —
-        // on the relay's app-role connection an unbound read sees zero rows and would silently turn
-        // every enrollment into claim-but-skip.
+        // Tenancy (ADR-0029): both modules are tenant-agnostic — neither table carries a company
+        // column, and org scoping is the composing service's tenancy RLS fence. The read still goes
+        // through the legacy `company_scope::fetch_optional_scoped` twin for its connection
+        // discipline: it rides the request-dedicated connection when the composing service bound
+        // one, and the plain pool otherwise. The helper's legacy task-local branch is never taken —
+        // this module sets no legacy scope of its own.
         let row: Option<(Option<Decimal>,)> = backbone_orm::company_scope::fetch_optional_scoped(
             &self.pool,
             sqlx::query_as(
@@ -147,29 +149,28 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
             .map_err(|e| handler_err(format!("bad envelope id '{}': {e}", envelope.id)))?;
 
         let p = &envelope.payload;
-        let company_id: Uuid = json_field(p, "company_id")?;
         let employee_id: Uuid = json_field(p, "employee_id")?;
         let onboarding_id: Option<Uuid> = serde_json::from_value(p["onboarding_id"].clone()).ok();
 
         // Read the starting salary BEFORE the write tx (a best-effort snapshot read on the pool, the
         // same pattern as lifecycle's PoolOffboardingInputs). None/0 → claim-but-skip. The read rides
-        // the event's company scope — the employee master is strictly fenced, so an ambient-scope-less
-        // read on the relay's app-role connection would see nothing (see the port impl above).
-        let base_salary = backbone_orm::company_scope::with_company_scope(
-            Some(company_id),
-            self.inputs.starting_salary(employee_id),
-        )
-        .await
-        .map_err(map_db)?;
+        // the ambient org request scope the relay holds (see the port impl above).
+        let base_salary = self
+            .inputs
+            .starting_salary(employee_id)
+            .await
+            .map_err(map_db)?;
 
         let mut tx = self.pool.begin().await.map_err(map_db)?;
 
-        // The relay's connection crosses tenants only on the outbox tables — every domain table
-        // sits behind the strict company fence. Bind the event's company (from the payload) before
-        // any statement so the INSERT passes the fence's WITH CHECK.
-        backbone_orm::company_scope::bind_company_on(&mut tx, company_id)
-            .await
-            .map_err(|e| handler_err(format!("company bind: {e}")))?;
+        // Tenancy (ADR-0029): the module is tenant-agnostic — relay the ambient org request scope
+        // onto our own transaction so the INSERT passes the composing service's tenancy RLS fence;
+        // an undecorated deployment is unfenced by design.
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope)
+                .await
+                .map_err(|e| handler_err(format!("org scope bind: {e}")))?;
+        }
 
         // Claim the event in-tx with the effect: the inbox row + the (conditional) insert commit
         // together. A missing salary still claims (so a replay is a no-op) but skips the INSERT.
@@ -187,11 +188,10 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
                 let note = format!("onboarding enrollment: initial compensation (period {period})");
                 sqlx::query(
                     r#"INSERT INTO payroll.compensation_changes
-                           (company_id, employee_id, change_type, new_amount, effective_date,
+                           (employee_id, change_type, new_amount, effective_date,
                             reference_id, note)
-                       VALUES ($1, $2, 'hire'::compensation_change_type, $3, $4, $5, $6)"#,
+                       VALUES ($1, 'hire'::compensation_change_type, $2, $3, $4, $5)"#,
                 )
-                .bind(company_id)
                 .bind(employee_id)
                 .bind(amount)
                 .bind(Utc::now().date_naive())

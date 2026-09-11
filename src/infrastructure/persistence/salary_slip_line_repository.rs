@@ -13,7 +13,11 @@ use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use backbone_orm::company_scope;
+// The multi-row read twin lives only in the legacy `company_scope` module. Its connection discipline
+// is what this adapter needs — request-dedicated connection when the composing service bound one,
+// plain pool otherwise. The helper's legacy task-local branch is never taken: this module sets no
+// legacy scope of its own (ADR-0029).
+use backbone_orm::company_scope::fetch_all_rows_scoped;
 
 use crate::domain::entity::SalarySlipLine;
 
@@ -48,7 +52,6 @@ impl SalarySlipLineRepository {
 pub struct NewSlipLineRow<'a> {
     pub id: Uuid,
     pub salary_slip_id: Uuid,
-    pub company_id: Uuid,
     pub name: &'a str,
     pub component_type: &'a str,
     pub is_statutory: bool,
@@ -72,8 +75,9 @@ impl SalarySlipLineRepository {
     /// Insert one line of a slip.
     ///
     /// Takes the CALLER'S connection so every line and its slip commit as ONE unit. The caller has
-    /// already bound the company on it — don't re-bind here. The line carries its own denormalized
-    /// `company_id` (ADR-0010 child-table fence) so the WITH CHECK passes without a parent join.
+    /// already relayed the ambient org request scope onto it — don't re-bind here. The line's own org
+    /// scoping rides its parent slip row (ADR-0029); the module carries no denormalized tenancy
+    /// column.
     pub async fn insert_line(
         &self,
         conn: &mut sqlx::PgConnection,
@@ -81,10 +85,10 @@ impl SalarySlipLineRepository {
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO payroll.salary_slip_lines
-                 (id, salary_slip_id, company_id, name, component_type, is_statutory, amount, gl_account_id)
-               VALUES ($1,$2,$3,$4,$5::component_type,$6,$7,$8)"#,
+                 (id, salary_slip_id, name, component_type, is_statutory, amount, gl_account_id)
+               VALUES ($1,$2,$3,$4::component_type,$5,$6,$7)"#,
         )
-        .bind(l.id).bind(l.salary_slip_id).bind(l.company_id).bind(l.name).bind(l.component_type)
+        .bind(l.id).bind(l.salary_slip_id).bind(l.name).bind(l.component_type)
         .bind(l.is_statutory).bind(l.amount).bind(l.gl_account_id)
         .execute(conn)
         .await?;
@@ -95,15 +99,16 @@ impl SalarySlipLineRepository {
     /// salary journal, and the same grouping that becomes `PayrollPosted`'s payable breakdown
     /// (settlement's input).
     ///
-    /// A read outside any transaction: takes the pool and runs `fetch_all_rows_scoped` so the RLS fence
-    /// (ADR-0008 on the slip, ADR-0010 on the line) applies. The caller wraps this in
-    /// `with_company_scope(Some(company_id))` using the company it read off the run.
+    /// A read outside any transaction: takes the pool and runs `fetch_all_rows_scoped` so the
+    /// composing service's tenancy RLS fence applies (ADR-0029). The caller relays the ambient org
+    /// request scope onto its own transaction first, or runs under HTTP where the
+    /// request-dedicated connection already carries it.
     pub async fn group_deductions_by_account(
         &self,
         pool: &PgPool,
         run_id: Uuid,
     ) -> Result<Vec<DeductionGroupRow>, sqlx::Error> {
-        let rows = company_scope::fetch_all_rows_scoped(
+        let rows = fetch_all_rows_scoped(
             pool,
             sqlx::query(
                 r#"SELECT l.gl_account_id, SUM(l.amount) AS amt, bool_or(l.is_statutory) AS statutory

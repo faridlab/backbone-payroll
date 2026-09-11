@@ -15,6 +15,8 @@
 # =============================================================================
 
 models:
+  # Tenancy: none, by design (ADR-0029). Tenant-agnostic and reusable; a composing
+  # service's tenancy decorator owns org scoping for this append-only log.
   - name: CompensationChange
     collection: compensation_changes
     description: "Append-only log of compensation changes; payroll-side receiver for lifecycle compound events."
@@ -24,11 +26,6 @@ models:
       id:
         type: uuid
         attributes: ["@id", "@default(uuid)"]
-
-      company_id:
-        type: uuid
-        attributes: ["@required", "@exclude_from_foreign_key_check"]
-        description: "# logical FK organization.Company.id"
 
       employee_id:
         type: uuid
@@ -64,8 +61,6 @@ models:
         description: "Audit metadata"
 
     indexes:
-      - type: index
-        fields: [company_id]
       - type: index
         fields: [employee_id]
       - type: index

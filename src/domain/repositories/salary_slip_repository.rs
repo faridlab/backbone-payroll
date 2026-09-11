@@ -45,7 +45,6 @@ pub struct SalarySlipPaginatedResult {
 #[derive(Debug, Clone, Default)]
 pub struct SalarySlipFilter {
     pub payroll_entry_id: Option<Uuid>,
-    pub company_id: Option<Uuid>,
     pub employee_id: Option<Uuid>,
     pub structure_id: Option<Uuid>,
     pub tax_method: Option<String>,
@@ -54,7 +53,7 @@ pub struct SalarySlipFilter {
 impl SalarySlipFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.payroll_entry_id.is_some() || self.company_id.is_some() || self.employee_id.is_some() || self.structure_id.is_some() || self.tax_method.is_some()
+        self.payroll_entry_id.is_some() || self.employee_id.is_some() || self.structure_id.is_some() || self.tax_method.is_some()
     }
 }
 

@@ -52,7 +52,6 @@ impl std::ops::Deref for SalarySlipLineId {
 pub struct SalarySlipLine {
     pub id: Uuid,
     pub salary_slip_id: Uuid,
-    pub company_id: Uuid,
     pub name: String,
     pub component_type: ComponentType,
     pub is_statutory: bool,
@@ -70,11 +69,10 @@ impl SalarySlipLine {
     }
 
     /// Create a new SalarySlipLine with required fields
-    pub fn new(salary_slip_id: Uuid, company_id: Uuid, name: String, component_type: ComponentType, is_statutory: bool, amount: Decimal, gl_account_id: Uuid) -> Self {
+    pub fn new(salary_slip_id: Uuid, name: String, component_type: ComponentType, is_statutory: bool, amount: Decimal, gl_account_id: Uuid) -> Self {
         Self {
             id: Uuid::new_v4(),
             salary_slip_id,
-            company_id,
             name,
             component_type,
             is_statutory,
@@ -146,9 +144,6 @@ impl SalarySlipLine {
                 "salary_slip_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.salary_slip_id = v; }
                 }
-                "company_id" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
-                }
                 "name" => {
                     if let Ok(v) = serde_json::from_value(value) { self.name = v; }
                 }
@@ -219,16 +214,12 @@ impl backbone_orm::EntityRepoMeta for SalarySlipLine {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
         m.insert("salary_slip_id".to_string(), "uuid".to_string());
-        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("gl_account_id".to_string(), "uuid".to_string());
         m.insert("component_type".to_string(), "component_type".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
         &["name"]
-    }
-    fn company_field() -> Option<&'static str> {
-        Some("company_id")
     }
 }
 
@@ -239,7 +230,6 @@ impl backbone_orm::EntityRepoMeta for SalarySlipLine {
 #[derive(Debug, Clone, Default)]
 pub struct SalarySlipLineBuilder {
     salary_slip_id: Option<Uuid>,
-    company_id: Option<Uuid>,
     name: Option<String>,
     component_type: Option<ComponentType>,
     is_statutory: Option<bool>,
@@ -251,12 +241,6 @@ impl SalarySlipLineBuilder {
     /// Set the salary_slip_id field (required)
     pub fn salary_slip_id(mut self, value: Uuid) -> Self {
         self.salary_slip_id = Some(value);
-        self
-    }
-
-    /// Set the company_id field (required)
-    pub fn company_id(mut self, value: Uuid) -> Self {
-        self.company_id = Some(value);
         self
     }
 
@@ -295,14 +279,12 @@ impl SalarySlipLineBuilder {
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<SalarySlipLine, String> {
         let salary_slip_id = self.salary_slip_id.ok_or_else(|| "salary_slip_id is required".to_string())?;
-        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let name = self.name.ok_or_else(|| "name is required".to_string())?;
         let gl_account_id = self.gl_account_id.ok_or_else(|| "gl_account_id is required".to_string())?;
 
         Ok(SalarySlipLine {
             id: Uuid::new_v4(),
             salary_slip_id,
-            company_id,
             name,
             component_type: self.component_type.unwrap_or_default(),
             is_statutory: self.is_statutory.unwrap_or(false),

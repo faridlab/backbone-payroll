@@ -33,24 +33,23 @@ impl RemittanceSink for CapturingRemit {
     }
 }
 
-async fn setup() -> (sqlx::PgPool, Uuid, PayrollAccounts, PayrollWriteService, Uuid) {
+async fn setup() -> (sqlx::PgPool, PayrollAccounts, PayrollWriteService, Uuid) {
     let pool = pool().await;
-    let company = Uuid::new_v4();
-    let a = payroll_accounts(&pool, company).await;
+    let a = payroll_accounts(&pool).await;
     let svc = PayrollWriteService::new(pool.clone());
     let structure = svc.create_structure(NewStructure {
-        company_id: company, name: "Staff".into(),
+        name: "Staff".into(),
         components: vec![NewComponent {
             name: "Gaji Pokok".into(), component_type: "earning".into(),
             amount: dec("5000000"), gl_account_id: a.salary_expense,
         }],
     }).await.unwrap();
-    (pool, company, a, svc, structure)
+    (pool, a, svc, structure)
 }
 
-fn new_run(company: Uuid, a: &PayrollAccounts) -> NewPayrollEntry {
+fn new_run(a: &PayrollAccounts) -> NewPayrollEntry {
     NewPayrollEntry {
-        company_id: company, period_year: 2026, period_month: 7,
+        period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }
 }
@@ -58,8 +57,8 @@ fn new_run(company: Uuid, a: &PayrollAccounts) -> NewPayrollEntry {
 // PIP-1 — deductions exceeding gross would make net pay negative → rejected (never persisted).
 #[tokio::test]
 async fn pip1_net_cannot_go_negative() {
-    let (_pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (_pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     let r = svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("0"),
@@ -73,8 +72,8 @@ async fn pip1_net_cannot_go_negative() {
 // PIP-2 — an employee can appear at most once in a run.
 #[tokio::test]
 async fn pip2_no_duplicate_slip_per_employee() {
-    let (_pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (_pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     let emp = Uuid::new_v4();
     let slip = NewSalarySlip { employee_id: emp, structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![] };
     svc.add_salary_slip(run, NewSalarySlip { ..clone_slip(&slip) }).await.unwrap();
@@ -89,8 +88,8 @@ fn clone_slip(s: &NewSalarySlip) -> NewSalarySlip {
 // PIP-3 — cannot post a run that has not been processed (still draft).
 #[tokio::test]
 async fn pip3_cannot_post_unprocessed_run() {
-    let (_pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (_pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
     }).await.unwrap();
@@ -101,8 +100,8 @@ async fn pip3_cannot_post_unprocessed_run() {
 // PIP-4 — a run with no slips cannot be processed.
 #[tokio::test]
 async fn pip4_empty_run_cannot_process() {
-    let (_pool, company, a, svc, _structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (_pool, a, svc, _structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     let r = svc.process_payroll_entry(run).await;
     assert!(matches!(r, Err(PayrollError::Invalid(_))), "empty run cannot process");
 }
@@ -111,8 +110,8 @@ async fn pip4_empty_run_cannot_process() {
 // slip cannot be added after processing (the run is no longer draft).
 #[tokio::test]
 async fn pip5_transition_gates_are_one_way() {
-    let (_pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (_pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
     }).await.unwrap();
@@ -127,13 +126,15 @@ async fn pip5_transition_gates_are_one_way() {
     assert!(matches!(late_slip, Err(PayrollError::InvalidState(_))), "cannot add a slip after processing");
 }
 
-// PIP-6 — a duplicate run for the same company/period is rejected (unique guard).
+// PIP-6 — the one-run-per-period uniqueness is tenancy POSTURE, not a module invariant (ADR-0029):
+// the old module-level (company_id, year, month) unique is stripped, and the composing service's
+// tenancy decorator re-declares it org-scoped (org_unit_id, year, month). Undecorated — as here —
+// the module enforces no period uniqueness, so a second run for the same period succeeds.
 #[tokio::test]
-async fn pip6_one_run_per_company_period() {
-    let (_pool, company, a, svc, _structure) = setup().await;
-    svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
-    let dup = svc.create_payroll_entry(new_run(company, &a)).await;
-    assert!(matches!(dup, Err(PayrollError::Invalid(_))), "duplicate company/period run rejected");
+async fn pip6_period_uniqueness_is_the_decorating_composers() {
+    let (_pool, a, svc, _structure) = setup().await;
+    svc.create_payroll_entry(new_run(&a)).await.unwrap();
+    svc.create_payroll_entry(new_run(&a)).await.unwrap();
 }
 
 // PIP-7 — proration never inflates gross above the structure (maturity council 2026-07-08). A NEGATIVE
@@ -142,8 +143,8 @@ async fn pip6_one_run_per_company_period() {
 // gross would be 5,000,000 × (22-(-5))/22 ≈ 6,136,363 — a balanced-but-over-booked salary journal.
 #[tokio::test]
 async fn pip7_negative_unpaid_days_cannot_inflate_gross() {
-    let (pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     let slip = svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("-5"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
@@ -158,8 +159,8 @@ async fn pip7_negative_unpaid_days_cannot_inflate_gross() {
 // to pay yet — deductions may still change).
 #[tokio::test]
 async fn pip8_remit_requires_a_posted_run() {
-    let (_pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (_pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     let draft = svc.remit_payroll_entry(run, &CapturingRemit::new()).await;
     assert!(matches!(draft, Err(PayrollError::InvalidState(_))), "draft run cannot remit");
 
@@ -177,10 +178,10 @@ async fn pip8_remit_requires_a_posted_run() {
 // refuses `remittance_seam_unwired` — both 422, never a silent no-op effect.
 #[tokio::test]
 async fn pip9_unwired_seams_refuse_with_stable_codes() {
-    let (pool, company, a, svc, structure) = setup().await;
+    let (pool, a, svc, structure) = setup().await;
 
     // GL: post through the module-held (default-Unwired) sink.
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None,
         statutory: vec![StatutoryLine { name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable }],
@@ -213,11 +214,13 @@ async fn pip9_unwired_seams_refuse_with_stable_codes() {
 
 // PIP-10 — remittance derives one instruction per statutory payable with a stable idempotency key
 // (`payroll_remittance:{company}:{run}:{account}`) so a payment adapter can dedup a re-driven remit;
-// the net-pay account is NOT a remittance payable (settlement pays it separately).
+// the net-pay account is NOT a remittance payable (settlement pays it separately). The company
+// segment is the legacy tenancy twin echo (ADR-0029): the ambient org scope's legacy company id,
+// or nil undecorated — either way stable per run+account.
 #[tokio::test]
 async fn pip10_remit_idempotency_key_covers_each_payable() {
-    let (_pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (_pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None,
         statutory: vec![
@@ -238,7 +241,7 @@ async fn pip10_remit_idempotency_key_covers_each_payable() {
         let instr = seen.iter().find(|s| s.idempotency_key == i.idempotency_key).expect("acked instruction was seen");
         assert_eq!(
             instr.idempotency_key,
-            format!("payroll_remittance:{company}:{run}:{}", instr.gl_account_id),
+            format!("payroll_remittance:{}:{}:{}", instr.company_id, run, instr.gl_account_id),
             "stable per-payable key a payment adapter can dedup on"
         );
         assert!(instr.statutory, "deduction payables are statutory remittances");
@@ -252,8 +255,8 @@ async fn pip10_remit_idempotency_key_covers_each_payable() {
 // post landed is recoverable by re-running the verb) while the GL sink still sees exactly ONE post.
 #[tokio::test]
 async fn pip11_already_posted_run_republishes_the_event() {
-    let (_pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
+    let (_pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
     }).await.unwrap();
@@ -269,44 +272,19 @@ async fn pip11_already_posted_run_republishes_the_event() {
     assert_eq!(events.events.lock().unwrap().len(), 2, "the already path RE-publishes the posted event");
 }
 
-// PIP-12 — the computed-slip verb's employee read is company-scoped: an employee id belonging to
-// ANOTHER company yields 404 (the port's live-employee predicate carries the tenant), so a
-// cross-tenant employee reference cannot produce a slip in this company's run even before the DB
-// fence is considered.
+// PIP-12 — the computed-slip verb's employee read is ID-only (ADR-0029): the employee module is
+// tenant-agnostic and carries no company predicate; org isolation of employee reads is the
+// composing service's tenancy fence, not the module's. An employee id with no row at all reads as
+// not_found regardless of deployment posture.
 #[tokio::test]
-async fn pip12_cross_tenant_employee_reference_is_not_found() {
-    let (pool, company, a, svc, structure) = setup().await;
-    let run = svc.create_payroll_entry(new_run(company, &a)).await.unwrap();
-
-    // A real, live employee row — in a DIFFERENT company.
-    let other_company = Uuid::new_v4();
-    let employee_svc = backbone_employee::EmployeeService::with_repository(Arc::new(
-        backbone_employee::EmployeeRepository::new(pool.clone()),
-    ));
-    let outsider = employee_svc
-        .create(backbone_employee::presentation::dto::CreateEmployeeDto {
-            company_id: other_company,
-            employee_number: format!("E-{}", &Uuid::new_v4().to_string()[..8]),
-            user_id: None,
-            first_name: "Other".into(),
-            last_name: None,
-            email: None,
-            mobile_phone: None,
-            phone: None,
-            birth_place: None,
-            birth_date: None,
-            gender: None,
-            marital_status: None,
-            blood_type: None,
-            religion_id: None,
-        })
-        .await
-        .unwrap();
+async fn pip12_unknown_employee_reference_is_not_found() {
+    let (_pool, a, svc, structure) = setup().await;
+    let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
 
     let r = svc
         .add_computed_salary_slip(ComputedSlipRequest {
             run_id: run,
-            employee_id: outsider.id,
+            employee_id: Uuid::new_v4(),
             structure_id: structure,
             working_days: dec("22"),
             unpaid_days: dec("0"),
@@ -320,9 +298,9 @@ async fn pip12_cross_tenant_employee_reference_is_not_found() {
         .await;
     match r {
         Err(e) => {
-            assert_eq!(e.code(), "not_found", "a cross-tenant employee reads as absent");
+            assert_eq!(e.code(), "not_found", "an unknown employee reads as absent");
             assert_eq!(e.http_status(), 404);
         }
-        Ok(_) => panic!("a cross-tenant employee must not produce a slip"),
+        Ok(_) => panic!("an employee with no row must not produce a slip"),
     }
 }

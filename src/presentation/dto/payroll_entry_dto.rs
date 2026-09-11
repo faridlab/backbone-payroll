@@ -34,9 +34,6 @@ use crate::domain::entity::PayrollStatus;
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct CreatePayrollEntryDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(alias = "period_year")]
     pub period_year: i32,
@@ -75,9 +72,6 @@ pub struct CreatePayrollEntryDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdatePayrollEntryDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(alias = "period_year")]
     pub period_year: i32,
@@ -116,9 +110,6 @@ pub struct UpdatePayrollEntryDto {
 #[cfg_attr(feature = "validation", derive(Validate))]
 #[serde(rename_all = "camelCase")]
 pub struct PatchPayrollEntryDto {
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "period_year")]
     pub period_year: Option<i32>,
@@ -148,7 +139,7 @@ pub struct PatchPayrollEntryDto {
 impl PatchPayrollEntryDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.company_id.is_some() || self.period_year.is_some() || self.period_month.is_some() || self.posting_date.is_some() || self.status.is_some() || self.salary_expense_account_id.is_some() || self.salary_payable_account_id.is_some() || self.total_gross.is_some() || self.total_deductions.is_some() || self.total_net.is_some() || self.journal_id.is_some() || self.accounting_post_id.is_some()
+        self.period_year.is_some() || self.period_month.is_some() || self.posting_date.is_some() || self.status.is_some() || self.salary_expense_account_id.is_some() || self.salary_payable_account_id.is_some() || self.total_gross.is_some() || self.total_deductions.is_some() || self.total_net.is_some() || self.journal_id.is_some() || self.accounting_post_id.is_some()
     }
 }
 
@@ -166,8 +157,6 @@ impl PatchPayrollEntryDto {
 pub struct PayrollEntryResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     pub period_year: i32,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
@@ -238,9 +227,9 @@ impl PayrollEntryListResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct PayrollEntrySummaryDto {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub period_year: i32,
     pub period_month: i32,
+    pub posting_date: Option<DateTime<Utc>>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -252,7 +241,6 @@ impl From<PayrollEntry> for PayrollEntryResponseDto {
     fn from(entity: PayrollEntry) -> Self {
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             period_year: entity.period_year,
             period_month: entity.period_month,
             posting_date: entity.posting_date,
@@ -274,9 +262,9 @@ impl From<PayrollEntry> for PayrollEntrySummaryDto {
         let created_at = backbone_core::PersistentEntity::created_at(&entity);
         Self {
             id: entity.id,
-            company_id: entity.company_id,
             period_year: entity.period_year,
             period_month: entity.period_month,
+            posting_date: entity.posting_date,
             created_at,
         }
     }
@@ -286,7 +274,6 @@ impl From<CreatePayrollEntryDto> for PayrollEntry {
     fn from(dto: CreatePayrollEntryDto) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id: dto.company_id,
             period_year: dto.period_year,
             period_month: dto.period_month,
             posting_date: dto.posting_date,
@@ -307,7 +294,6 @@ impl From<&PayrollEntry> for PayrollEntryResponseDto {
     fn from(entity: &PayrollEntry) -> Self {
         Self {
             id: entity.id.clone(),
-            company_id: entity.company_id.clone(),
             period_year: entity.period_year.clone(),
             period_month: entity.period_month.clone(),
             posting_date: entity.posting_date.clone(),
@@ -332,7 +318,6 @@ impl backbone_core::FromCreateDto<CreatePayrollEntryDto> for PayrollEntry {
 
 impl backbone_core::ApplyUpdateDto<UpdatePayrollEntryDto> for PayrollEntry {
     fn apply_update(mut self, dto: UpdatePayrollEntryDto) -> backbone_core::ServiceResult<Self> {
-        self.company_id = dto.company_id;
         self.period_year = dto.period_year;
         self.period_month = dto.period_month;
         self.posting_date = dto.posting_date;

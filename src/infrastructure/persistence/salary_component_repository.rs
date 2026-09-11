@@ -12,7 +12,11 @@ use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use backbone_orm::company_scope;
+// The multi-row read twin lives only in the legacy `company_scope` module. Its connection discipline
+// is what this adapter needs — request-dedicated connection when the composing service bound one,
+// plain pool otherwise. The helper's legacy task-local branch is never taken: this module sets no
+// legacy scope of its own (ADR-0029).
+use backbone_orm::company_scope::fetch_all_rows_scoped;
 
 use crate::domain::entity::SalaryComponent;
 
@@ -47,7 +51,6 @@ impl SalaryComponentRepository {
 pub struct NewComponentRow<'a> {
     pub id: Uuid,
     pub structure_id: Uuid,
-    pub company_id: Uuid,
     pub name: &'a str,
     pub component_type: &'a str,
     pub amount: Decimal,
@@ -69,9 +72,9 @@ impl SalaryComponentRepository {
     /// Insert one earning/deduction component of a structure.
     ///
     /// Takes the CALLER'S connection so the structure and all its components commit as ONE unit. The
-    /// caller has already bound the company on it — don't re-bind here. The component carries its own
-    /// denormalized `company_id` (ADR-0010 child-table fence) so the WITH CHECK passes without a parent
-    /// join.
+    /// caller has already relayed the ambient org request scope onto it — don't re-bind here. The
+    /// component's own org scoping rides its parent structure row (ADR-0029); the module carries no
+    /// denormalized tenancy column.
     pub async fn insert_component(
         &self,
         conn: &mut sqlx::PgConnection,
@@ -79,10 +82,10 @@ impl SalaryComponentRepository {
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO payroll.salary_components
-                 (id, structure_id, company_id, name, component_type, amount, gl_account_id)
-               VALUES ($1,$2,$3,$4,$5::component_type,$6,$7)"#,
+                 (id, structure_id, name, component_type, amount, gl_account_id)
+               VALUES ($1,$2,$3,$4::component_type,$5,$6)"#,
         )
-        .bind(c.id).bind(c.structure_id).bind(c.company_id).bind(c.name).bind(c.component_type)
+        .bind(c.id).bind(c.structure_id).bind(c.name).bind(c.component_type)
         .bind(c.amount).bind(c.gl_account_id)
         .execute(conn)
         .await?;
@@ -91,15 +94,16 @@ impl SalaryComponentRepository {
 
     /// List a structure's components — the earnings and fixed deductions a slip is assembled from.
     ///
-    /// A read outside any transaction: takes the pool and runs `fetch_all_rows_scoped` so the RLS fence
-    /// (ADR-0010 on the component) applies. The caller wraps this in
-    /// `with_company_scope(Some(company_id))` using the company it read off the run.
+    /// A read outside any transaction: takes the pool and runs `fetch_all_rows_scoped` so the
+    /// composing service's tenancy RLS fence applies (ADR-0029). The caller relays the ambient org
+    /// request scope onto its own transaction first, or runs under HTTP where the
+    /// request-dedicated connection already carries it.
     pub async fn list_by_structure(
         &self,
         pool: &PgPool,
         structure_id: Uuid,
     ) -> Result<Vec<ComponentRow>, sqlx::Error> {
-        let rows = company_scope::fetch_all_rows_scoped(
+        let rows = fetch_all_rows_scoped(
             pool,
             sqlx::query(
                 "SELECT name, component_type::text AS ct, amount, gl_account_id FROM payroll.salary_components WHERE structure_id=$1")

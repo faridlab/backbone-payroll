@@ -40,16 +40,16 @@ pub fn npwp() -> String {
     format!("{n:015}")
 }
 
-pub async fn account(pool: &PgPool, company: Uuid, code: &str, atype: &str, subtype: &str, normal: &str) -> Uuid {
+pub async fn account(pool: &PgPool, code: &str, atype: &str, subtype: &str, normal: &str) -> Uuid {
     let id = Uuid::new_v4();
     sqlx::query(
         r#"INSERT INTO accounting.accounts
-             (id, company_id, account_number, account_code, name, account_type, account_subtype,
+             (id, account_number, account_code, name, account_type, account_subtype,
               normal_balance, is_header, is_detail, status)
-           VALUES ($1,$2,$3,$4,$5,$6::account_type,$7::account_subtype,$8::normal_balance,
+           VALUES ($1,$2,$3,$4,$5::account_type,$6::account_subtype,$7::normal_balance,
                    false,true,'active'::account_status)"#,
     )
-    .bind(id).bind(company).bind(code).bind(code).bind(code).bind(atype).bind(subtype).bind(normal)
+    .bind(id).bind(code).bind(code).bind(code).bind(atype).bind(subtype).bind(normal)
     .execute(pool).await.expect("seed account");
     id
 }
@@ -74,12 +74,12 @@ pub struct PayrollAccounts {
     pub bpjs_payable: Uuid,
     pub pph21_payable: Uuid,
 }
-pub async fn payroll_accounts(pool: &PgPool, company: Uuid) -> PayrollAccounts {
+pub async fn payroll_accounts(pool: &PgPool) -> PayrollAccounts {
     PayrollAccounts {
-        salary_expense: account(pool, company, "6100-SAL", "expense", "operating_expense", "debit").await,
-        salary_payable: account(pool, company, "2100-SPY", "liability", "current_liability", "credit").await,
-        bpjs_payable: account(pool, company, "2110-BPJS", "liability", "current_liability", "credit").await,
-        pph21_payable: account(pool, company, "2120-PPH", "liability", "current_liability", "credit").await,
+        salary_expense: account(pool, "6100-SAL", "expense", "operating_expense", "debit").await,
+        salary_payable: account(pool, "2100-SPY", "liability", "current_liability", "credit").await,
+        bpjs_payable: account(pool, "2110-BPJS", "liability", "current_liability", "credit").await,
+        pph21_payable: account(pool, "2120-PPH", "liability", "current_liability", "credit").await,
     }
 }
 

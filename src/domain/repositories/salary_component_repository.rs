@@ -45,7 +45,6 @@ pub struct SalaryComponentPaginatedResult {
 #[derive(Debug, Clone, Default)]
 pub struct SalaryComponentFilter {
     pub structure_id: Option<Uuid>,
-    pub company_id: Option<Uuid>,
     pub name: Option<String>,
     pub component_type: Option<ComponentType>,
     pub gl_account_id: Option<Uuid>,
@@ -54,7 +53,7 @@ pub struct SalaryComponentFilter {
 impl SalaryComponentFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.structure_id.is_some() || self.company_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.gl_account_id.is_some()
+        self.structure_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.gl_account_id.is_some()
     }
 }
 

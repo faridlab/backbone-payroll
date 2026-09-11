@@ -37,9 +37,6 @@ pub struct CreateSalarySlipLineDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "salary_slip_id")]
     pub salary_slip_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "validation", validate(length(max = 140)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
@@ -70,9 +67,6 @@ pub struct UpdateSalarySlipLineDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "salary_slip_id")]
     pub salary_slip_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "validation", validate(length(max = 140)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
@@ -103,9 +97,6 @@ pub struct PatchSalarySlipLineDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "salary_slip_id")]
     pub salary_slip_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
     #[cfg_attr(feature = "validation", validate(length(max = 140)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -125,7 +116,7 @@ pub struct PatchSalarySlipLineDto {
 impl PatchSalarySlipLineDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.salary_slip_id.is_some() || self.company_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.is_statutory.is_some() || self.amount.is_some() || self.gl_account_id.is_some()
+        self.salary_slip_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.is_statutory.is_some() || self.amount.is_some() || self.gl_account_id.is_some()
     }
 }
 
@@ -145,8 +136,6 @@ pub struct SalarySlipLineResponseDto {
     pub id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub salary_slip_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
     pub component_type: ComponentType,
@@ -213,8 +202,8 @@ impl SalarySlipLineListResponseDto {
 pub struct SalarySlipLineSummaryDto {
     pub id: Uuid,
     pub salary_slip_id: Uuid,
-    pub company_id: Uuid,
     pub name: String,
+    pub component_type: ComponentType,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -227,7 +216,6 @@ impl From<SalarySlipLine> for SalarySlipLineResponseDto {
         Self {
             id: entity.id,
             salary_slip_id: entity.salary_slip_id,
-            company_id: entity.company_id,
             name: entity.name,
             component_type: entity.component_type,
             is_statutory: entity.is_statutory,
@@ -244,8 +232,8 @@ impl From<SalarySlipLine> for SalarySlipLineSummaryDto {
         Self {
             id: entity.id,
             salary_slip_id: entity.salary_slip_id,
-            company_id: entity.company_id,
             name: entity.name,
+            component_type: entity.component_type,
             created_at,
         }
     }
@@ -256,7 +244,6 @@ impl From<CreateSalarySlipLineDto> for SalarySlipLine {
         Self {
             id: Uuid::new_v4(),
             salary_slip_id: dto.salary_slip_id,
-            company_id: dto.company_id,
             name: dto.name,
             component_type: dto.component_type,
             is_statutory: dto.is_statutory,
@@ -272,7 +259,6 @@ impl From<&SalarySlipLine> for SalarySlipLineResponseDto {
         Self {
             id: entity.id.clone(),
             salary_slip_id: entity.salary_slip_id.clone(),
-            company_id: entity.company_id.clone(),
             name: entity.name.clone(),
             component_type: entity.component_type.clone(),
             is_statutory: entity.is_statutory.clone(),
@@ -292,7 +278,6 @@ impl backbone_core::FromCreateDto<CreateSalarySlipLineDto> for SalarySlipLine {
 impl backbone_core::ApplyUpdateDto<UpdateSalarySlipLineDto> for SalarySlipLine {
     fn apply_update(mut self, dto: UpdateSalarySlipLineDto) -> backbone_core::ServiceResult<Self> {
         self.salary_slip_id = dto.salary_slip_id;
-        self.company_id = dto.company_id;
         self.name = dto.name;
         self.component_type = dto.component_type;
         self.is_statutory = dto.is_statutory;

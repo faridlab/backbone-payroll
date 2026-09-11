@@ -37,9 +37,6 @@ pub struct CreateSalarySlipDto {
     #[serde(alias = "payroll_entry_id")]
     pub payroll_entry_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "structure_id")]
@@ -77,9 +74,6 @@ pub struct UpdateSalarySlipDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "payroll_entry_id")]
     pub payroll_entry_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(alias = "company_id")]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "employee_id")]
     pub employee_id: Uuid,
@@ -119,9 +113,6 @@ pub struct PatchSalarySlipDto {
     #[serde(skip_serializing_if = "Option::is_none", alias = "payroll_entry_id")]
     pub payroll_entry_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_id")]
-    pub company_id: Option<Uuid>,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "structure_id")]
@@ -146,7 +137,7 @@ pub struct PatchSalarySlipDto {
 impl PatchSalarySlipDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.payroll_entry_id.is_some() || self.company_id.is_some() || self.employee_id.is_some() || self.structure_id.is_some() || self.working_days.is_some() || self.unpaid_days.is_some() || self.gross_pay.is_some() || self.total_deductions.is_some() || self.net_pay.is_some() || self.overtime_hours.is_some() || self.tax_method.is_some()
+        self.payroll_entry_id.is_some() || self.employee_id.is_some() || self.structure_id.is_some() || self.working_days.is_some() || self.unpaid_days.is_some() || self.gross_pay.is_some() || self.total_deductions.is_some() || self.net_pay.is_some() || self.overtime_hours.is_some() || self.tax_method.is_some()
     }
 }
 
@@ -166,8 +157,6 @@ pub struct SalarySlipResponseDto {
     pub id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub payroll_entry_id: Uuid,
-    #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
-    pub company_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub employee_id: Uuid,
     pub structure_id: Option<Uuid>,
@@ -236,8 +225,8 @@ impl SalarySlipListResponseDto {
 pub struct SalarySlipSummaryDto {
     pub id: Uuid,
     pub payroll_entry_id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
+    pub structure_id: Option<Uuid>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -250,7 +239,6 @@ impl From<SalarySlip> for SalarySlipResponseDto {
         Self {
             id: entity.id,
             payroll_entry_id: entity.payroll_entry_id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
             structure_id: entity.structure_id,
             working_days: entity.working_days,
@@ -271,8 +259,8 @@ impl From<SalarySlip> for SalarySlipSummaryDto {
         Self {
             id: entity.id,
             payroll_entry_id: entity.payroll_entry_id,
-            company_id: entity.company_id,
             employee_id: entity.employee_id,
+            structure_id: entity.structure_id,
             created_at,
         }
     }
@@ -283,7 +271,6 @@ impl From<CreateSalarySlipDto> for SalarySlip {
         Self {
             id: Uuid::new_v4(),
             payroll_entry_id: dto.payroll_entry_id,
-            company_id: dto.company_id,
             employee_id: dto.employee_id,
             structure_id: dto.structure_id,
             working_days: dto.working_days,
@@ -303,7 +290,6 @@ impl From<&SalarySlip> for SalarySlipResponseDto {
         Self {
             id: entity.id.clone(),
             payroll_entry_id: entity.payroll_entry_id.clone(),
-            company_id: entity.company_id.clone(),
             employee_id: entity.employee_id.clone(),
             structure_id: entity.structure_id.clone(),
             working_days: entity.working_days.clone(),
@@ -327,7 +313,6 @@ impl backbone_core::FromCreateDto<CreateSalarySlipDto> for SalarySlip {
 impl backbone_core::ApplyUpdateDto<UpdateSalarySlipDto> for SalarySlip {
     fn apply_update(mut self, dto: UpdateSalarySlipDto) -> backbone_core::ServiceResult<Self> {
         self.payroll_entry_id = dto.payroll_entry_id;
-        self.company_id = dto.company_id;
         self.employee_id = dto.employee_id;
         self.structure_id = dto.structure_id;
         self.working_days = dto.working_days;

@@ -41,7 +41,6 @@ impl SalaryStructureRepository {
 /// parameter.
 pub struct NewStructureRow<'a> {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub name: &'a str,
 }
 
@@ -50,19 +49,19 @@ pub struct NewStructureRow<'a> {
 impl SalaryStructureRepository {
     /// Define a salary structure, active from the start.
     ///
-    /// Takes the CALLER'S connection so the structure and its components commit as ONE unit. The caller
-    /// has already bound the company on it (`bind_company_on`) so this passes the `app.company_id` WITH
-    /// CHECK fence (ADR-0008) — don't re-bind here.
+    /// Takes the CALLER'S connection so the structure and its components commit as ONE unit. The
+    /// caller has already relayed the ambient org request scope onto it (`bind_org_scope_on`,
+    /// ADR-0029) so this passes the tenancy RLS fence — don't re-bind here.
     pub async fn insert_structure(
         &self,
         conn: &mut sqlx::PgConnection,
         s: &NewStructureRow<'_>,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            r#"INSERT INTO payroll.salary_structures (id, company_id, name, status)
-               VALUES ($1,$2,$3,'active')"#,
+            r#"INSERT INTO payroll.salary_structures (id, name, status)
+               VALUES ($1,$2,'active')"#,
         )
-        .bind(s.id).bind(s.company_id).bind(s.name)
+        .bind(s.id).bind(s.name)
         .execute(conn)
         .await?;
         Ok(())

@@ -12,7 +12,11 @@ use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use backbone_orm::company_scope;
+// The one-row read twin lives only in the legacy `company_scope` module. Its connection discipline
+// is what this adapter needs — request-dedicated connection when the composing service bound one,
+// plain pool otherwise. The helper's legacy task-local branch is never taken: this module sets no
+// legacy scope of its own (ADR-0029).
+use backbone_orm::company_scope::fetch_one_row_scoped;
 
 use crate::domain::entity::SalarySlip;
 
@@ -47,7 +51,6 @@ impl SalarySlipRepository {
 pub struct NewSalarySlipRow {
     pub id: Uuid,
     pub payroll_entry_id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub structure_id: Uuid,
     pub working_days: Decimal,
@@ -73,8 +76,8 @@ impl SalarySlipRepository {
     /// Insert an employee's slip into a run.
     ///
     /// Takes the CALLER'S connection so the slip and its lines commit as ONE unit. The caller has
-    /// already bound the run's own company on it (`bind_company_on`) so this passes the WITH CHECK fence
-    /// (ADR-0008) — don't re-bind here.
+    /// already relayed the ambient org request scope onto it (`bind_org_scope_on`, ADR-0029) so this
+    /// passes the tenancy RLS fence — don't re-bind here.
     ///
     /// Returns the raw `sqlx::Error` deliberately: the caller inspects it for a unique violation to turn
     /// a second slip for the same employee in the same run into a domain error.
@@ -85,11 +88,11 @@ impl SalarySlipRepository {
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO payroll.salary_slips
-                 (id, payroll_entry_id, company_id, employee_id, structure_id, working_days, unpaid_days,
+                 (id, payroll_entry_id, employee_id, structure_id, working_days, unpaid_days,
                   gross_pay, total_deductions, net_pay, overtime_hours, tax_method)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"#,
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"#,
         )
-        .bind(s.id).bind(s.payroll_entry_id).bind(s.company_id).bind(s.employee_id).bind(s.structure_id)
+        .bind(s.id).bind(s.payroll_entry_id).bind(s.employee_id).bind(s.structure_id)
         .bind(s.working_days).bind(s.unpaid_days).bind(s.gross_pay).bind(s.total_deductions).bind(s.net_pay)
         .bind(s.overtime_hours).bind(s.tax_method.clone())
         .execute(conn)
@@ -99,15 +102,15 @@ impl SalarySlipRepository {
 
     /// Roll a run's live slips up into its gross/deduction/net totals, with the slip count.
     ///
-    /// ID-only: the run id alone identifies the work, so this rides the request-dedicated connection's
-    /// `app.company_id`. An event-driven caller must wrap it in
-    /// `with_company_scope(Some(event.company_id))` or the read fails closed.
+    /// ID-only: the run id alone identifies the work, so this rides the request-dedicated
+    /// connection's org request scope (ADR-0029). A caller driving its own transaction relays the
+    /// ambient scope onto it first.
     pub async fn sum_totals_by_run(
         &self,
         pool: &PgPool,
         run_id: Uuid,
     ) -> Result<SlipTotalsRow, sqlx::Error> {
-        let row = company_scope::fetch_one_row_scoped(
+        let row = fetch_one_row_scoped(
             pool,
             sqlx::query(
                 r#"SELECT COALESCE(SUM(gross_pay),0) AS g, COALESCE(SUM(total_deductions),0) AS d,

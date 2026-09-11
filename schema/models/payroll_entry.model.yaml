@@ -1,13 +1,16 @@
 # =============================================================================
 # Domain: Payroll
 # Entity: PayrollEntry
-# Description: A payroll RUN for a company over one period (year/month). It gathers per-employee salary
+# Description: A payroll RUN over one period (year/month). It gathers per-employee salary
 # slips, rolls up gross/deductions/net, and on posting emits ONE balanced AccountingPost — the 8th GL
 # producer: `Dr Salary Expense (gross) · Cr Salary Payable (net) · Cr statutory payables (BPJS + PPh 21)`.
 # Idempotent per run (source_id = run id). Reads the HR employee master; posts to backbone-accounting.
 # =============================================================================
 
 models:
+  # Tenancy: none, by design (ADR-0029). Tenant-agnostic and reusable; a composing
+  # service's tenancy decorator owns org scoping for this table, including the
+  # per-unit run unique (one run per org unit per year/month).
   - name: PayrollEntry
     collection: payroll_entries
     description: "A payroll run over a period; posts one balanced salary journal to the GL"
@@ -16,10 +19,6 @@ models:
         type: uuid
         attributes: ["@id", "@default(uuid)"]
         description: "Unique run id (the GL source_id)"
-      company_id:
-        type: uuid
-        attributes: ["@required", "@exclude_from_foreign_key_check"]
-        description: "Books owner # logical FK to organization.Company.id"
       period_year:
         type: integer
         attributes: ["@required"]
@@ -68,10 +67,11 @@ models:
         attributes: ["@audit_metadata"]
         description: "Audit metadata"
     indexes:
-      - type: unique
-        fields: [company_id, period_year, period_month]
-      - type: index
-        fields: [company_id, status]
+      # No tenancy indexes (ADR-0029): the module is tenant-agnostic. The per-unit
+      # run unique — one run per org unit per year/month among live rows — is
+      # installed by the composing service's tenancy decorator (org_unit_id-leading),
+      # not declared here; a module-level (period_year, period_month) unique would
+      # forbid two units of one tenant running payroll in the same month.
 
 enums:
   - name: PayrollStatus

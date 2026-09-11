@@ -13,11 +13,13 @@ module: payroll
 version: 2
 schema: payroll
 
-# ADR-0014 company fence (Wave 1 P0 sweep, 2026-08-16): payroll data carries the strongest ACL posture in the service (pillar-hrms
-# H-7) — strict: slip lines and structure components are embedded collections fenced
-# with their parents; compensation_changes shipped post-cleanup without a policy,
-# which this declaration closes.
-company_fence: strict
+# Tenancy: none, by design (ADR-0029). The module is tenant-agnostic and reusable —
+# it ships no scoping column and no fence declaration. A composing backend-service
+# that wants these tables org-scoped declares them in its tenancy.yaml; the
+# decorator installs org_unit_id, the RLS policy, and the per-unit payroll-run
+# period unique (one run per org unit per year/month) at composition time. The
+# embedded collections (slip lines, structure components) scope with their
+# parents — the decorator fences them the same way.
 description: "payroll domain module"
 
 config:

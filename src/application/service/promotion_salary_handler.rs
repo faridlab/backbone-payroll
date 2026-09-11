@@ -55,7 +55,6 @@ impl IntegrationEventHandler for PromotionSalaryHandler {
             .map_err(|e| handler_err(format!("bad envelope id '{}': {e}", envelope.id)))?;
 
         let p = &envelope.payload;
-        let company_id: Uuid = json_field(p, "company_id")?;
         let employee_id: Uuid = json_field(p, "employee_id")?;
         let promotion_id: Option<Uuid> = serde_json::from_value(p["promotion_id"].clone()).ok();
         let effective_date: Option<NaiveDate> = serde_json::from_value(p["effective_date"].clone()).ok();
@@ -66,12 +65,14 @@ impl IntegrationEventHandler for PromotionSalaryHandler {
 
         let mut tx = self.pool.begin().await.map_err(map_db)?;
 
-        // The relay's connection crosses tenants only on the outbox tables — every domain table
-        // sits behind the strict company fence. Bind the event's company (from the payload) before
-        // any statement so the INSERT passes the fence's WITH CHECK.
-        backbone_orm::company_scope::bind_company_on(&mut tx, company_id)
-            .await
-            .map_err(|e| handler_err(format!("company bind: {e}")))?;
+        // Tenancy (ADR-0029): the module is tenant-agnostic — relay the ambient org request scope
+        // onto our own transaction so the INSERT passes the composing service's tenancy RLS fence;
+        // an undecorated deployment is unfenced by design.
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope)
+                .await
+                .map_err(|e| handler_err(format!("org scope bind: {e}")))?;
+        }
 
         // Claim the event in-tx with the effect: the inbox row + the (conditional) insert commit
         // together. A null proposed_salary still claims (so a replay is a no-op) but skips the INSERT.
@@ -85,11 +86,10 @@ impl IntegrationEventHandler for PromotionSalaryHandler {
                 // promotion_id is the non-null idempotency link. effective_date carries the move's date.
                 sqlx::query(
                     r#"INSERT INTO payroll.compensation_changes
-                           (company_id, employee_id, change_type, new_amount, effective_date,
+                           (employee_id, change_type, new_amount, effective_date,
                             reference_id, note)
-                       VALUES ($1, $2, 'promotion'::compensation_change_type, $3, $4, $5, $6)"#,
+                       VALUES ($1, 'promotion'::compensation_change_type, $2, $3, $4, $5)"#,
                 )
-                .bind(company_id)
                 .bind(employee_id)
                 .bind(amount)
                 .bind(effective_date)

@@ -50,7 +50,6 @@ impl std::ops::Deref for SalaryStructureId {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct SalaryStructure {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub name: String,
     pub status: SalaryStructureStatus,
     #[serde(default)]
@@ -65,10 +64,9 @@ impl SalaryStructure {
     }
 
     /// Create a new SalaryStructure with required fields
-    pub fn new(company_id: Uuid, name: String, status: SalaryStructureStatus) -> Self {
+    pub fn new(name: String, status: SalaryStructureStatus) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id,
             name,
             status,
             metadata: AuditMetadata::default(),
@@ -139,9 +137,6 @@ impl SalaryStructure {
     pub fn apply_patch(&mut self, fields: std::collections::HashMap<String, serde_json::Value>) {
         for (key, value) in fields {
             match key.as_str() {
-                "company_id" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
-                }
                 "name" => {
                     if let Ok(v) = serde_json::from_value(value) { self.name = v; }
                 }
@@ -202,15 +197,11 @@ impl backbone_orm::EntityRepoMeta for SalaryStructure {
     fn column_types() -> std::collections::HashMap<String, String> {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
-        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("status".to_string(), "salary_structure_status".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
         &["name"]
-    }
-    fn company_field() -> Option<&'static str> {
-        Some("company_id")
     }
 }
 
@@ -220,18 +211,11 @@ impl backbone_orm::EntityRepoMeta for SalaryStructure {
 /// System fields (id, metadata, timestamps) are auto-initialized.
 #[derive(Debug, Clone, Default)]
 pub struct SalaryStructureBuilder {
-    company_id: Option<Uuid>,
     name: Option<String>,
     status: Option<SalaryStructureStatus>,
 }
 
 impl SalaryStructureBuilder {
-    /// Set the company_id field (required)
-    pub fn company_id(mut self, value: Uuid) -> Self {
-        self.company_id = Some(value);
-        self
-    }
-
     /// Set the name field (required)
     pub fn name(mut self, value: String) -> Self {
         self.name = Some(value);
@@ -248,12 +232,10 @@ impl SalaryStructureBuilder {
     ///
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<SalaryStructure, String> {
-        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let name = self.name.ok_or_else(|| "name is required".to_string())?;
 
         Ok(SalaryStructure {
             id: Uuid::new_v4(),
-            company_id,
             name,
             status: self.status.unwrap_or_default(),
             metadata: AuditMetadata::default(),

@@ -10,17 +10,15 @@
 //!   lifecycle (`draft → processed → posted`, at-most-once GL post), the slip roll-up, the balanced
 //!   salary journal, and the fail-closed seams (GL / remittance default-unwired).
 //!
-//! The tenant comes from the [`CompanyContext`] the `company_auth` middleware inserts — never from
-//! the body. `statutoryAccounts` and `riskClass` on the computed-slip body are stopgaps: the
-//! accounting composition will resolve the payable accounts itself, and the HR master will carry
-//! the BPJS JKK risk class, at which point both leave the request.
-//!
-//! **Fence posture** (ADR-0008): the generated read routes and structure CRUD carry no company
-//! predicate in SQL — row visibility is the DB fence (strict RLS, `app.company_id` request
-//! binding). Composers MUST mount this behind `company_auth` with the request-scoped DB binding
-//! (the serpa posture), where a cross-tenant id simply matches zero rows. Every write verb's SQL
-//! additionally rides the same request scope, so a cross-tenant run id 404s — pinned by
-//! tests/integrity_probes.rs.
+//! Tenancy (ADR-0029): the module is tenant-agnostic — it extracts no tenant identity from the
+//! token and carries none in its bodies. Every write handler still extracts
+//! [`backbone_auth::org::OrgContext`] so an org-auth-mounted router cannot even dispatch without
+//! authenticated org identity present; the org identity used by the DATABASE is the ambient
+//! request scope the composing service binds (its tenancy decorator + middleware), and an
+//! undecorated deployment is unfenced by design. `statutoryAccounts` and `riskClass` on the
+//! computed-slip body are stopgaps: the accounting composition will resolve the payable accounts
+//! itself, and the HR master will carry the BPJS JKK risk class, at which point both leave the
+//! request.
 
 use std::sync::Arc;
 
@@ -31,7 +29,7 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use backbone_auth::company::CompanyContext;
+use backbone_auth::org::OrgContext;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -168,12 +166,11 @@ struct RemitOutcomeBody {
 
 async fn create_structure(
     State(svc): State<Arc<PayrollWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Json(b): Json<CreateStructureBody>,
 ) -> axum::response::Response {
     match svc
         .create_structure(NewStructure {
-            company_id: tenant.company_id,
             name: b.name,
             components: b
                 .components
@@ -195,12 +192,11 @@ async fn create_structure(
 
 async fn create_run(
     State(svc): State<Arc<PayrollWriteService>>,
-    tenant: CompanyContext,
+    _org: OrgContext,
     Json(b): Json<CreateRunBody>,
 ) -> axum::response::Response {
     match svc
         .create_payroll_entry(NewPayrollEntry {
-            company_id: tenant.company_id,
             period_year: b.period_year,
             period_month: b.period_month,
             salary_expense_account_id: b.salary_expense_account_id,
@@ -215,7 +211,7 @@ async fn create_run(
 
 async fn add_computed_slip(
     State(svc): State<Arc<PayrollWriteService>>,
-    _tenant: CompanyContext,
+    _org: OrgContext,
     Path(run_id): Path<Uuid>,
     Json(b): Json<ComputedSlipBody>,
 ) -> axum::response::Response {
@@ -242,7 +238,7 @@ async fn add_computed_slip(
 
 async fn process_run(
     State(svc): State<Arc<PayrollWriteService>>,
-    _tenant: CompanyContext,
+    _org: OrgContext,
     Path(run_id): Path<Uuid>,
 ) -> axum::response::Response {
     match svc.process_payroll_entry(run_id).await {
@@ -253,7 +249,7 @@ async fn process_run(
 
 async fn post_run(
     State(svc): State<Arc<PayrollWriteService>>,
-    _tenant: CompanyContext,
+    _org: OrgContext,
     Path(run_id): Path<Uuid>,
     body: Option<Json<PostBody>>,
 ) -> axum::response::Response {
@@ -276,7 +272,7 @@ async fn post_run(
 
 async fn remit_run(
     State(svc): State<Arc<PayrollWriteService>>,
-    _tenant: CompanyContext,
+    _org: OrgContext,
     Path(run_id): Path<Uuid>,
 ) -> axum::response::Response {
     match svc.remit_run(run_id).await {
@@ -306,8 +302,9 @@ async fn remit_run(
 // ── composition ────────────────────────────────────────────────────────────────
 
 /// Build the guarded payroll router: entity reads + structure/component CRUD + the run verbs,
-/// NO generic run/slip/slip-line mutation. Mount under the host's authenticated (`company_auth`)
-/// tree with the request-scoped DB binding.
+/// NO generic run/slip/slip-line mutation. Mount under the host's org-auth tree (ADR-0029): the
+/// composing service's middleware holds the ambient org request scope its tenancy decorator
+/// fenced the tables with.
 pub fn create_guarded_payroll_routes(m: &PayrollModule) -> Router {
     let writes = Router::new()
         .route("/salary-structures", post(create_structure))

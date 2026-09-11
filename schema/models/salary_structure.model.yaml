@@ -9,6 +9,9 @@
 # =============================================================================
 
 models:
+  # Tenancy: none, by design (ADR-0029). Tenant-agnostic and reusable; a composing
+  # service's tenancy decorator owns org scoping for both tables in this file —
+  # components scope with their parent structure, no denormalized column needed.
   - name: SalaryStructure
     collection: salary_structures
     description: "A reusable pay template (earnings + fixed deductions)"
@@ -17,10 +20,6 @@ models:
         type: uuid
         attributes: ["@id", "@default(uuid)"]
         description: "Unique structure id"
-      company_id:
-        type: uuid
-        attributes: ["@required", "@exclude_from_foreign_key_check"]
-        description: "Org owner # logical FK to organization.Company.id"
       name:
         type: string
         attributes: ["@required", "@max(140)"]
@@ -34,8 +33,9 @@ models:
         attributes: ["@audit_metadata"]
         description: "Audit metadata"
     indexes:
-      - type: index
-        fields: [company_id, status]
+      # No tenancy indexes (ADR-0029): the module is tenant-agnostic. The
+      # company-leading status listing index is a tenancy read path and is not
+      # declared here; the composing decorator's org fence covers the reads.
 
   - name: SalaryComponent
     collection: salary_components
@@ -49,10 +49,6 @@ models:
         type: uuid
         attributes: ["@required", "@foreign_key(SalaryStructure.id)"]
         description: "Parent structure"
-      company_id:
-        type: uuid
-        attributes: ["@required", "@exclude_from_foreign_key_check"]
-        description: "Org owner # denormalized from SalaryStructure.company_id for the ADR-0010 child-table RLS fence # logical FK to organization.Company.id"
       name:
         type: string
         attributes: ["@required", "@max(140)"]
@@ -76,8 +72,6 @@ models:
     indexes:
       - type: index
         fields: [structure_id]
-      - type: index
-        fields: [company_id]
 
 enums:
   - name: SalaryStructureStatus

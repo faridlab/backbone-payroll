@@ -25,7 +25,6 @@ impl TestDataGenerator for SalarySlipTestData {
         json!({
             "id": Uuid::new_v4().to_string(),
             "payroll_entry_id": Uuid::new_v4().to_string(),
-            "company_id": Uuid::new_v4().to_string(),
             "employee_id": Uuid::new_v4().to_string(),
             "structure_id": null,
             "working_days": 0,
@@ -44,7 +43,6 @@ impl TestDataGenerator for SalarySlipTestData {
         json!({
             "id": id,
             "payroll_entry_id": Uuid::new_v4().to_string(),
-            "company_id": Uuid::new_v4().to_string(),
             "employee_id": Uuid::new_v4().to_string(),
             "structure_id": null,
             "working_days": 0,

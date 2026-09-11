@@ -51,7 +51,6 @@ impl std::ops::Deref for CompensationChangeId {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct CompensationChange {
     pub id: Uuid,
-    pub company_id: Uuid,
     pub employee_id: Uuid,
     pub change_type: CompensationChangeType,
     pub new_amount: Option<Decimal>,
@@ -70,10 +69,9 @@ impl CompensationChange {
     }
 
     /// Create a new CompensationChange with required fields
-    pub fn new(company_id: Uuid, employee_id: Uuid, change_type: CompensationChangeType) -> Self {
+    pub fn new(employee_id: Uuid, change_type: CompensationChangeType) -> Self {
         Self {
             id: Uuid::new_v4(),
-            company_id,
             employee_id,
             change_type,
             new_amount: None,
@@ -171,9 +169,6 @@ impl CompensationChange {
     pub fn apply_patch(&mut self, fields: std::collections::HashMap<String, serde_json::Value>) {
         for (key, value) in fields {
             match key.as_str() {
-                "company_id" => {
-                    if let Ok(v) = serde_json::from_value(value) { self.company_id = v; }
-                }
                 "employee_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.employee_id = v; }
                 }
@@ -246,7 +241,6 @@ impl backbone_orm::EntityRepoMeta for CompensationChange {
     fn column_types() -> std::collections::HashMap<String, String> {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
-        m.insert("company_id".to_string(), "uuid".to_string());
         m.insert("employee_id".to_string(), "uuid".to_string());
         m.insert("reference_id".to_string(), "uuid".to_string());
         m.insert("change_type".to_string(), "compensation_change_type".to_string());
@@ -254,9 +248,6 @@ impl backbone_orm::EntityRepoMeta for CompensationChange {
     }
     fn search_fields() -> &'static [&'static str] {
         &[]
-    }
-    fn company_field() -> Option<&'static str> {
-        Some("company_id")
     }
 }
 
@@ -266,7 +257,6 @@ impl backbone_orm::EntityRepoMeta for CompensationChange {
 /// System fields (id, metadata, timestamps) are auto-initialized.
 #[derive(Debug, Clone, Default)]
 pub struct CompensationChangeBuilder {
-    company_id: Option<Uuid>,
     employee_id: Option<Uuid>,
     change_type: Option<CompensationChangeType>,
     new_amount: Option<Decimal>,
@@ -276,12 +266,6 @@ pub struct CompensationChangeBuilder {
 }
 
 impl CompensationChangeBuilder {
-    /// Set the company_id field (required)
-    pub fn company_id(mut self, value: Uuid) -> Self {
-        self.company_id = Some(value);
-        self
-    }
-
     /// Set the employee_id field (required)
     pub fn employee_id(mut self, value: Uuid) -> Self {
         self.employee_id = Some(value);
@@ -322,13 +306,11 @@ impl CompensationChangeBuilder {
     ///
     /// Returns Err if any required field without a default is missing.
     pub fn build(self) -> Result<CompensationChange, String> {
-        let company_id = self.company_id.ok_or_else(|| "company_id is required".to_string())?;
         let employee_id = self.employee_id.ok_or_else(|| "employee_id is required".to_string())?;
         let change_type = self.change_type.ok_or_else(|| "change_type is required".to_string())?;
 
         Ok(CompensationChange {
             id: Uuid::new_v4(),
-            company_id,
             employee_id,
             change_type,
             new_amount: self.new_amount,

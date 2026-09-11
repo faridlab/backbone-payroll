@@ -2227,15 +2227,11 @@ components:
       type: object
       required:
         - id
-        - company_id
         - employee_id
         - change_type
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -2276,14 +2272,10 @@ components:
     CreateCompensationChangeRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - change_type
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -2309,14 +2301,10 @@ components:
     UpdateCompensationChangeRequest:
       type: object
       required:
-        - company_id
         - employee_id
         - change_type
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -2342,9 +2330,6 @@ components:
     PatchCompensationChangeRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         employee_id:
           type: string
           format: uuid
@@ -2381,7 +2366,6 @@ components:
       type: object
       required:
         - id
-        - company_id
         - period_year
         - period_month
         - status
@@ -2391,9 +2375,6 @@ components:
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         period_year:
@@ -2449,7 +2430,6 @@ components:
     CreatePayrollEntryRequest:
       type: object
       required:
-        - company_id
         - period_year
         - period_month
         - status
@@ -2458,9 +2438,6 @@ components:
         - total_net
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         period_year:
           type: integer
           format: int32
@@ -2501,7 +2478,6 @@ components:
     UpdatePayrollEntryRequest:
       type: object
       required:
-        - company_id
         - period_year
         - period_month
         - status
@@ -2510,9 +2486,6 @@ components:
         - total_net
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         period_year:
           type: integer
           format: int32
@@ -2553,9 +2526,6 @@ components:
     PatchPayrollEntryRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         period_year:
           type: integer
           format: int32
@@ -2608,7 +2578,6 @@ components:
       required:
         - id
         - payroll_entry_id
-        - company_id
         - employee_id
         - working_days
         - unpaid_days
@@ -2621,9 +2590,6 @@ components:
           type: string
           format: uuid
         payroll_entry_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -2670,7 +2636,6 @@ components:
       type: object
       required:
         - payroll_entry_id
-        - company_id
         - employee_id
         - working_days
         - unpaid_days
@@ -2680,9 +2645,6 @@ components:
         - metadata
       properties:
         payroll_entry_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -2716,7 +2678,6 @@ components:
       type: object
       required:
         - payroll_entry_id
-        - company_id
         - employee_id
         - working_days
         - unpaid_days
@@ -2726,9 +2687,6 @@ components:
         - metadata
       properties:
         payroll_entry_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -2762,9 +2720,6 @@ components:
       type: object
       properties:
         payroll_entry_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         employee_id:
@@ -2809,7 +2764,6 @@ components:
       required:
         - id
         - salary_slip_id
-        - company_id
         - name
         - component_type
         - is_statutory
@@ -2821,9 +2775,6 @@ components:
           type: string
           format: uuid
         salary_slip_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:
@@ -2858,7 +2809,6 @@ components:
       type: object
       required:
         - salary_slip_id
-        - company_id
         - name
         - component_type
         - is_statutory
@@ -2867,9 +2817,6 @@ components:
         - metadata
       properties:
         salary_slip_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:
@@ -2891,7 +2838,6 @@ components:
       type: object
       required:
         - salary_slip_id
-        - company_id
         - name
         - component_type
         - is_statutory
@@ -2900,9 +2846,6 @@ components:
         - metadata
       properties:
         salary_slip_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:
@@ -2924,9 +2867,6 @@ components:
       type: object
       properties:
         salary_slip_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:
@@ -2958,15 +2898,11 @@ components:
       type: object
       required:
         - id
-        - company_id
         - name
         - status
         - metadata
       properties:
         id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:
@@ -2993,14 +2929,10 @@ components:
     CreateSalaryStructureRequest:
       type: object
       required:
-        - company_id
         - name
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         name:
           type: string
           maxLength: 140
@@ -3012,14 +2944,10 @@ components:
     UpdateSalaryStructureRequest:
       type: object
       required:
-        - company_id
         - name
         - status
         - metadata
       properties:
-        company_id:
-          type: string
-          format: uuid
         name:
           type: string
           maxLength: 140
@@ -3031,9 +2959,6 @@ components:
     PatchSalaryStructureRequest:
       type: object
       properties:
-        company_id:
-          type: string
-          format: uuid
         name:
           type: string
           maxLength: 140
@@ -3057,7 +2982,6 @@ components:
       required:
         - id
         - structure_id
-        - company_id
         - name
         - component_type
         - amount
@@ -3068,9 +2992,6 @@ components:
           type: string
           format: uuid
         structure_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:
@@ -3103,7 +3024,6 @@ components:
       type: object
       required:
         - structure_id
-        - company_id
         - name
         - component_type
         - amount
@@ -3111,9 +3031,6 @@ components:
         - metadata
       properties:
         structure_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:
@@ -3133,7 +3050,6 @@ components:
       type: object
       required:
         - structure_id
-        - company_id
         - name
         - component_type
         - amount
@@ -3141,9 +3057,6 @@ components:
         - metadata
       properties:
         structure_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:
@@ -3163,9 +3076,6 @@ components:
       type: object
       properties:
         structure_id:
-          type: string
-          format: uuid
-        company_id:
           type: string
           format: uuid
         name:

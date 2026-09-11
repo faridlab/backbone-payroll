@@ -40,6 +40,10 @@ impl GlPostLine {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AccountingPostEnvelope {
     pub idempotency_key: String,
+    /// The legacy tenancy twin (ADR-0029) — the GL contract keeps the field for unstripped
+    /// producers/consumers. The payroll tables hold no company column; the write path echoes the
+    /// ambient org scope's legacy company id, or nil when none is bound. Nothing keys a statement
+    /// on it.
     pub company_id: Uuid,
     pub branch_id: Option<Uuid>,
     /// Posting source discriminator — payroll emits "payroll".

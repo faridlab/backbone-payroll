@@ -31,16 +31,13 @@ pub struct EmployeeStatutory {
 /// tax/BPJS rows degrade to defaults exactly like the employee module's own read.
 #[async_trait]
 pub trait EmployeeStatutoryInputs: Send + Sync {
-    async fn statutory_inputs(
-        &self,
-        company_id: Uuid,
-        employee_id: Uuid,
-    ) -> Result<Option<EmployeeStatutory>, sqlx::Error>;
+    async fn statutory_inputs(&self, employee_id: Uuid) -> Result<Option<EmployeeStatutory>, sqlx::Error>;
 }
 
 /// Default pool-backed [`EmployeeStatutoryInputs`] — the employee module's exported read
 /// (`statutory_row_for` + the PTKP override/derive rule), expressed as one plain SQL statement for
-/// standalone use. The company predicate is belt-and-braces; under RLS the fence applies regardless.
+/// standalone use. Both modules are tenant-agnostic (ADR-0029): the employee table carries no
+/// company column; the read is org-scoped only by the composing service's tenancy RLS fence.
 pub struct PoolEmployeeStatutoryInputs {
     pool: PgPool,
 }
@@ -66,11 +63,7 @@ struct StatutoryRaw {
 
 #[async_trait]
 impl EmployeeStatutoryInputs for PoolEmployeeStatutoryInputs {
-    async fn statutory_inputs(
-        &self,
-        company_id: Uuid,
-        employee_id: Uuid,
-    ) -> Result<Option<EmployeeStatutory>, sqlx::Error> {
+    async fn statutory_inputs(&self, employee_id: Uuid) -> Result<Option<EmployeeStatutory>, sqlx::Error> {
         let row: Option<StatutoryRaw> = sqlx::query_as(
             r#"SELECT
                  (SELECT t.ptkp_override::text
@@ -106,12 +99,10 @@ impl EmployeeStatutoryInputs for PoolEmployeeStatutoryInputs {
                      AND (f.metadata->>'deleted_at') IS NULL) AS children
                FROM employee.employees e
               WHERE e.id = $1
-                AND e.company_id = $2
                 AND (e.metadata->>'deleted_at') IS NULL
               LIMIT 1"#,
         )
         .bind(employee_id)
-        .bind(company_id)
         .fetch_optional(&self.pool)
         .await?;
         Ok(row.map(|r| {
