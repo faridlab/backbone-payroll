@@ -7,7 +7,7 @@ info:
     This API provides 11 standard CRUD endpoints for each model.
 
 servers:
-  - url: http://localhost:3000
+  - url: /
     description: Development server
 
 tags:
@@ -25,7 +25,7 @@ tags:
     description: SalaryComponent management endpoints
 
 paths:
-  /api/v1/compensation_changes:
+  /api/v1/payroll/compensation_changes:
     get:
       tags:
         - CompensationChanges
@@ -71,7 +71,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/compensation_changes/{id}:
+  /api/v1/payroll/compensation_changes/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -143,7 +143,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/compensation_changes/bulk:
+  /api/v1/payroll/compensation_changes/bulk:
     post:
       tags:
         - CompensationChanges
@@ -235,7 +235,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/compensation_changes/upsert:
+  /api/v1/payroll/compensation_changes/upsert:
     post:
       tags:
         - CompensationChanges
@@ -265,7 +265,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CompensationChange'
 
-  /api/v1/compensation_changes/trash:
+  /api/v1/payroll/compensation_changes/trash:
     get:
       tags:
         - CompensationChanges
@@ -282,7 +282,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CompensationChangeList'
 
-  /api/v1/compensation_changes/{id}/restore:
+  /api/v1/payroll/compensation_changes/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -300,7 +300,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/compensation_changes/empty:
+  /api/v1/payroll/compensation_changes/empty:
     delete:
       tags:
         - CompensationChanges
@@ -317,7 +317,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/compensation_changes/delete/bulk:
+  /api/v1/payroll/compensation_changes/delete/bulk:
     post:
       tags:
         - CompensationChanges
@@ -337,7 +337,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/compensation_changes/restore/bulk:
+  /api/v1/payroll/compensation_changes/restore/bulk:
     post:
       tags:
         - CompensationChanges
@@ -355,7 +355,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/compensation_changes/restore/all:
+  /api/v1/payroll/compensation_changes/restore/all:
     post:
       tags:
         - CompensationChanges
@@ -371,7 +371,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/compensation_changes/trash/bulk:
+  /api/v1/payroll/compensation_changes/trash/bulk:
     delete:
       tags:
         - CompensationChanges
@@ -391,7 +391,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/payroll_entries:
+  /api/v1/payroll/payroll_entries:
     get:
       tags:
         - PayrollEntries
@@ -437,7 +437,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/payroll_entries/{id}:
+  /api/v1/payroll/payroll_entries/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -509,7 +509,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/payroll_entries/bulk:
+  /api/v1/payroll/payroll_entries/bulk:
     post:
       tags:
         - PayrollEntries
@@ -601,7 +601,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/payroll_entries/upsert:
+  /api/v1/payroll/payroll_entries/upsert:
     post:
       tags:
         - PayrollEntries
@@ -631,7 +631,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PayrollEntry'
 
-  /api/v1/payroll_entries/trash:
+  /api/v1/payroll/payroll_entries/trash:
     get:
       tags:
         - PayrollEntries
@@ -648,7 +648,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PayrollEntryList'
 
-  /api/v1/payroll_entries/{id}/restore:
+  /api/v1/payroll/payroll_entries/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -666,7 +666,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/payroll_entries/empty:
+  /api/v1/payroll/payroll_entries/empty:
     delete:
       tags:
         - PayrollEntries
@@ -683,7 +683,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/payroll_entries/delete/bulk:
+  /api/v1/payroll/payroll_entries/delete/bulk:
     post:
       tags:
         - PayrollEntries
@@ -703,7 +703,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/payroll_entries/restore/bulk:
+  /api/v1/payroll/payroll_entries/restore/bulk:
     post:
       tags:
         - PayrollEntries
@@ -721,7 +721,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/payroll_entries/restore/all:
+  /api/v1/payroll/payroll_entries/restore/all:
     post:
       tags:
         - PayrollEntries
@@ -737,7 +737,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/payroll_entries/trash/bulk:
+  /api/v1/payroll/payroll_entries/trash/bulk:
     delete:
       tags:
         - PayrollEntries
@@ -757,7 +757,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_slips:
+  /api/v1/payroll/salary_slips:
     get:
       tags:
         - SalarySlips
@@ -803,7 +803,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/salary_slips/{id}:
+  /api/v1/payroll/salary_slips/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -875,7 +875,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/salary_slips/bulk:
+  /api/v1/payroll/salary_slips/bulk:
     post:
       tags:
         - SalarySlips
@@ -967,7 +967,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_slips/upsert:
+  /api/v1/payroll/salary_slips/upsert:
     post:
       tags:
         - SalarySlips
@@ -997,7 +997,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalarySlip'
 
-  /api/v1/salary_slips/trash:
+  /api/v1/payroll/salary_slips/trash:
     get:
       tags:
         - SalarySlips
@@ -1014,7 +1014,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalarySlipList'
 
-  /api/v1/salary_slips/{id}/restore:
+  /api/v1/payroll/salary_slips/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1032,7 +1032,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/salary_slips/empty:
+  /api/v1/payroll/salary_slips/empty:
     delete:
       tags:
         - SalarySlips
@@ -1049,7 +1049,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/salary_slips/delete/bulk:
+  /api/v1/payroll/salary_slips/delete/bulk:
     post:
       tags:
         - SalarySlips
@@ -1069,7 +1069,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_slips/restore/bulk:
+  /api/v1/payroll/salary_slips/restore/bulk:
     post:
       tags:
         - SalarySlips
@@ -1087,7 +1087,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_slips/restore/all:
+  /api/v1/payroll/salary_slips/restore/all:
     post:
       tags:
         - SalarySlips
@@ -1103,7 +1103,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/salary_slips/trash/bulk:
+  /api/v1/payroll/salary_slips/trash/bulk:
     delete:
       tags:
         - SalarySlips
@@ -1123,7 +1123,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_slip_lines:
+  /api/v1/payroll/salary_slip_lines:
     get:
       tags:
         - SalarySlipLines
@@ -1169,7 +1169,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/salary_slip_lines/{id}:
+  /api/v1/payroll/salary_slip_lines/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1241,7 +1241,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/salary_slip_lines/bulk:
+  /api/v1/payroll/salary_slip_lines/bulk:
     post:
       tags:
         - SalarySlipLines
@@ -1333,7 +1333,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_slip_lines/upsert:
+  /api/v1/payroll/salary_slip_lines/upsert:
     post:
       tags:
         - SalarySlipLines
@@ -1363,7 +1363,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalarySlipLine'
 
-  /api/v1/salary_slip_lines/trash:
+  /api/v1/payroll/salary_slip_lines/trash:
     get:
       tags:
         - SalarySlipLines
@@ -1380,7 +1380,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalarySlipLineList'
 
-  /api/v1/salary_slip_lines/{id}/restore:
+  /api/v1/payroll/salary_slip_lines/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1398,7 +1398,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/salary_slip_lines/empty:
+  /api/v1/payroll/salary_slip_lines/empty:
     delete:
       tags:
         - SalarySlipLines
@@ -1415,7 +1415,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/salary_slip_lines/delete/bulk:
+  /api/v1/payroll/salary_slip_lines/delete/bulk:
     post:
       tags:
         - SalarySlipLines
@@ -1435,7 +1435,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_slip_lines/restore/bulk:
+  /api/v1/payroll/salary_slip_lines/restore/bulk:
     post:
       tags:
         - SalarySlipLines
@@ -1453,7 +1453,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_slip_lines/restore/all:
+  /api/v1/payroll/salary_slip_lines/restore/all:
     post:
       tags:
         - SalarySlipLines
@@ -1469,7 +1469,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/salary_slip_lines/trash/bulk:
+  /api/v1/payroll/salary_slip_lines/trash/bulk:
     delete:
       tags:
         - SalarySlipLines
@@ -1489,7 +1489,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_structures:
+  /api/v1/payroll/salary_structures:
     get:
       tags:
         - SalaryStructures
@@ -1535,7 +1535,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/salary_structures/{id}:
+  /api/v1/payroll/salary_structures/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1607,7 +1607,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/salary_structures/bulk:
+  /api/v1/payroll/salary_structures/bulk:
     post:
       tags:
         - SalaryStructures
@@ -1699,7 +1699,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_structures/upsert:
+  /api/v1/payroll/salary_structures/upsert:
     post:
       tags:
         - SalaryStructures
@@ -1729,7 +1729,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalaryStructure'
 
-  /api/v1/salary_structures/trash:
+  /api/v1/payroll/salary_structures/trash:
     get:
       tags:
         - SalaryStructures
@@ -1746,7 +1746,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalaryStructureList'
 
-  /api/v1/salary_structures/{id}/restore:
+  /api/v1/payroll/salary_structures/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1764,7 +1764,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/salary_structures/empty:
+  /api/v1/payroll/salary_structures/empty:
     delete:
       tags:
         - SalaryStructures
@@ -1781,7 +1781,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/salary_structures/delete/bulk:
+  /api/v1/payroll/salary_structures/delete/bulk:
     post:
       tags:
         - SalaryStructures
@@ -1801,7 +1801,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_structures/restore/bulk:
+  /api/v1/payroll/salary_structures/restore/bulk:
     post:
       tags:
         - SalaryStructures
@@ -1819,7 +1819,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_structures/restore/all:
+  /api/v1/payroll/salary_structures/restore/all:
     post:
       tags:
         - SalaryStructures
@@ -1835,7 +1835,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/salary_structures/trash/bulk:
+  /api/v1/payroll/salary_structures/trash/bulk:
     delete:
       tags:
         - SalaryStructures
@@ -1855,7 +1855,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_components:
+  /api/v1/payroll/salary_components:
     get:
       tags:
         - SalaryComponents
@@ -1901,7 +1901,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/salary_components/{id}:
+  /api/v1/payroll/salary_components/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1973,7 +1973,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/salary_components/bulk:
+  /api/v1/payroll/salary_components/bulk:
     post:
       tags:
         - SalaryComponents
@@ -2065,7 +2065,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_components/upsert:
+  /api/v1/payroll/salary_components/upsert:
     post:
       tags:
         - SalaryComponents
@@ -2095,7 +2095,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalaryComponent'
 
-  /api/v1/salary_components/trash:
+  /api/v1/payroll/salary_components/trash:
     get:
       tags:
         - SalaryComponents
@@ -2112,7 +2112,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SalaryComponentList'
 
-  /api/v1/salary_components/{id}/restore:
+  /api/v1/payroll/salary_components/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -2130,7 +2130,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/salary_components/empty:
+  /api/v1/payroll/salary_components/empty:
     delete:
       tags:
         - SalaryComponents
@@ -2147,7 +2147,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/salary_components/delete/bulk:
+  /api/v1/payroll/salary_components/delete/bulk:
     post:
       tags:
         - SalaryComponents
@@ -2167,7 +2167,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_components/restore/bulk:
+  /api/v1/payroll/salary_components/restore/bulk:
     post:
       tags:
         - SalaryComponents
@@ -2185,7 +2185,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/salary_components/restore/all:
+  /api/v1/payroll/salary_components/restore/all:
     post:
       tags:
         - SalaryComponents
@@ -2201,7 +2201,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/salary_components/trash/bulk:
+  /api/v1/payroll/salary_components/trash/bulk:
     delete:
       tags:
         - SalaryComponents
