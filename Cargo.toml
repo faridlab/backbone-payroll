@@ -1,6 +1,6 @@
 [package]
 name = "backbone-payroll"
-version = "0.3.8"
+version = "0.3.9"
 edition = "2021"
 description = "Minimal Backbone Framework module skeleton"
 
@@ -106,6 +106,6 @@ rand = "0.8"
 # the shipped library has ZERO normal Cargo edge to any of them.
 backbone-accounting = { path = "../backbone-accounting" }
 backbone-employee = { path = "../backbone-employee" }
-backbone-attendance = { git = "https://github.com/faridlab/backbone-attendance", tag = "v0.6.6" }
+backbone-attendance = { git = "https://github.com/faridlab/backbone-attendance", tag = "v0.6.7" }
 backbone-timeoff = { path = "../backbone-timeoff" }
 backbone-calendar = { path = "../backbone-calendar" }
