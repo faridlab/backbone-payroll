@@ -244,6 +244,7 @@ dependencies = [
 [[package]]
 name = "backbone-attendance"
 version = "0.6.6"
+source = "git+https://github.com/faridlab/backbone-attendance?tag=v0.6.6#f7ac28bb9efa33510ce157dea4109f74ebdd613a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -444,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-payroll"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "async-trait",
