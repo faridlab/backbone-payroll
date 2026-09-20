@@ -91,16 +91,30 @@ impl ApprovedTimesheetInputs for PoolApprovedTimesheet {
         let Some(approval_id) = approval else {
             return Ok(None);
         };
+        // The PRICE ceiling: per day, at most the AUTHORISED overtime (the
+        // sum of approved pre-authorisations' planned hours for that day).
+        // Claimed excess is visibly unpaid — cropped to the ceiling, never
+        // silently dropped, so the slip line and the authorisation records
+        // reconcile.
         let stretches: Vec<(NaiveDate, Decimal)> = backbone_orm::company_scope::fetch_all_scoped(
             &self.pool,
             sqlx::query_as(
-                r#"SELECT t.date, SUM(t.unit_amount)
+                r#"SELECT t.date, LEAST(SUM(t.unit_amount), o.authed)
                      FROM timesheet.timesheets t
+                     JOIN LATERAL (
+                         SELECT COALESCE(SUM(r.hours_planned), 0) AS authed
+                           FROM attendance.overtime_requests r
+                          WHERE r.employee_id = t.employee_id
+                            AND r.date = t.date
+                            AND r.status = 'approved'
+                            AND (r.metadata->>'deleted_at') IS NULL
+                     ) o ON true
                     WHERE t.employee_id = $1
                       AND t.date BETWEEN $2 AND $3
                       AND t.entry_type = 'overtime'
                       AND (t.metadata->>'deleted_at') IS NULL
-                    GROUP BY t.date
+                    GROUP BY t.date, o.authed
+                   HAVING LEAST(SUM(t.unit_amount), o.authed) > 0
                     ORDER BY t.date"#,
             )
             .bind(employee_id)
