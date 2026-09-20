@@ -52,6 +52,9 @@ pub struct NewPayrollEntryRow {
     pub id: Uuid,
     pub period_year: i32,
     pub period_month: i32,
+    /// Non-calendar bounds (both or neither; the CHECK constrains order).
+    pub period_start: Option<chrono::NaiveDate>,
+    pub period_end: Option<chrono::NaiveDate>,
     pub salary_expense_account_id: Uuid,
     pub salary_payable_account_id: Uuid,
 }
@@ -67,6 +70,9 @@ pub struct RunPeriodRow {
     pub status: String,
     pub period_year: i32,
     pub period_month: i32,
+    /// Non-calendar bounds (both or neither).
+    pub period_start: Option<chrono::NaiveDate>,
+    pub period_end: Option<chrono::NaiveDate>,
     pub salary_expense_account_id: Option<Uuid>,
 }
 
@@ -105,12 +111,14 @@ impl PayrollEntryRepository {
             pool,
             sqlx::query(
                 r#"INSERT INTO payroll.payroll_entries
-                     (id, period_year, period_month, status, salary_expense_account_id,
-                      salary_payable_account_id, total_gross, total_deductions, total_net)
-                   VALUES ($1,$2,$3,'draft'::payroll_status,$4,$5,0,0,0)"#,
+                     (id, period_year, period_month, period_start, period_end, status,
+                      salary_expense_account_id, salary_payable_account_id,
+                      total_gross, total_deductions, total_net)
+                   VALUES ($1,$2,$3,$6,$7,'draft'::payroll_status,$4,$5,0,0,0)"#,
             )
             .bind(e.id).bind(e.period_year).bind(e.period_month)
-            .bind(e.salary_expense_account_id).bind(e.salary_payable_account_id),
+            .bind(e.salary_expense_account_id).bind(e.salary_payable_account_id)
+            .bind(e.period_start).bind(e.period_end),
         )
         .await?;
         Ok(())
@@ -149,7 +157,7 @@ impl PayrollEntryRepository {
             pool,
             sqlx::query(
                 r#"SELECT status::text AS status, period_year, period_month,
-                          salary_expense_account_id
+                          period_start, period_end, salary_expense_account_id
                    FROM payroll.payroll_entries
                    WHERE id=$1 AND (metadata->>'deleted_at') IS NULL"#,
             )
@@ -160,6 +168,8 @@ impl PayrollEntryRepository {
             status: r.get("status"),
             period_year: r.get("period_year"),
             period_month: r.get("period_month"),
+            period_start: r.get("period_start"),
+            period_end: r.get("period_end"),
             salary_expense_account_id: r.get("salary_expense_account_id"),
         }))
     }

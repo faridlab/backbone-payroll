@@ -112,6 +112,8 @@ pub struct PayrollEntryDto {
     pub period_month: i32,
     pub posting_date: Option<DateTime<Utc>>,
     pub timesheet_approval_id: Option<Uuid>,
+    pub period_start: Option<NaiveDate>,
+    pub period_end: Option<NaiveDate>,
     pub status: PayrollStatus,
     pub salary_expense_account_id: Option<Uuid>,
     pub salary_payable_account_id: Option<Uuid>,

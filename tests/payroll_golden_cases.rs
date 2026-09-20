@@ -51,6 +51,8 @@ async fn pgc1_full_month_net_pay() {
     let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
+            period_start: None,
+            period_end: None,
         period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
@@ -91,6 +93,8 @@ async fn pgc2_unpaid_days_prorate_gross() {
     let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
+            period_start: None,
+            period_end: None,
         period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
@@ -122,6 +126,8 @@ async fn pgc3_run_rollup_and_deduction_grouping() {
     let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
+            period_start: None,
+            period_end: None,
         period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
@@ -163,6 +169,8 @@ async fn pgc4_post_is_idempotent() {
     let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
+            period_start: None,
+            period_end: None,
         period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
@@ -194,6 +202,8 @@ async fn pgc5_payroll_posted_carries_payable_breakdown() {
     let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
+            period_start: None,
+            period_end: None,
         period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
@@ -320,6 +330,8 @@ async fn pgc7_pre_effective_period_run_refuses_to_compute() {
     let structure = standard_structure(&svc, a.salary_expense).await;
 
     let run = svc.create_payroll_entry(NewPayrollEntry {
+            period_start: None,
+            period_end: None,
         period_year: 2021, period_month: 12, // before the 2022-01-01 seeds
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();

@@ -34,6 +34,12 @@ models:
         type: uuid?
         attributes: ["@exclude_from_foreign_key_check"]
         description: "The approved timesheet period this run consumed (the provenance join both sides of the handoff were missing)"
+      period_start:
+        type: date?
+        description: "The run's first day when it is NOT the calendar month (e.g. a 26th-to-25th cut-off); NULL = the calendar month of (period_year, period_month)"
+      period_end:
+        type: date?
+        description: "The run's last day; NULL = the calendar month's last day"
       status:
         type: PayrollStatus
         attributes: ["@required", "@default(draft)"]

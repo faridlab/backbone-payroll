@@ -142,6 +142,9 @@ pub struct NewStructure {
 pub struct NewPayrollEntry {
     pub period_year: i32,
     pub period_month: i32,
+    /// Non-calendar cut-off (e.g. 26th→25th): both bounds or neither.
+    pub period_start: Option<chrono::NaiveDate>,
+    pub period_end: Option<chrono::NaiveDate>,
     pub salary_expense_account_id: Uuid,
     pub salary_payable_account_id: Uuid,
 }
@@ -377,6 +380,19 @@ impl PayrollWriteService {
         if !(1..=12).contains(&e.period_month) {
             return Err(PayrollError::Invalid("period_month must be 1..12".into()));
         }
+        match (e.period_start, e.period_end) {
+            (Some(start), Some(end)) if start > end => {
+                return Err(PayrollError::Invalid(
+                    "period_start must not be after period_end".into(),
+                ));
+            }
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(PayrollError::Invalid(
+                    "a non-calendar period needs BOTH period_start and period_end".into(),
+                ));
+            }
+            _ => {}
+        }
         let id = Uuid::new_v4();
         // Tenancy (ADR-0029): the insert rides the ambient org request scope — under HTTP the
         // request-dedicated connection already carries it; an undecorated deployment is unfenced
@@ -387,6 +403,8 @@ impl PayrollWriteService {
                 id,
                 period_year: e.period_year,
                 period_month: e.period_month,
+                period_start: e.period_start,
+                period_end: e.period_end,
                 salary_expense_account_id: e.salary_expense_account_id,
                 salary_payable_account_id: e.salary_payable_account_id,
             })
@@ -545,13 +563,22 @@ impl PayrollWriteService {
         }
         let month = u32::try_from(run.period_month)
             .map_err(|_| PayrollError::Invalid("period_month is not a valid month".into()))?;
-        let period_start = NaiveDate::from_ymd_opt(run.period_year, month, 1)
-            .ok_or(PayrollError::Invalid("run period is not a real calendar month".into()))?;
-        // Period end = day before the next month's first (year-rollover safe).
-        let (ny, nm) = if month == 12 { (run.period_year + 1, 1) } else { (run.period_year, month + 1) };
-        let period_end = NaiveDate::from_ymd_opt(ny, nm, 1)
-            .and_then(|d| d.pred_opt())
-            .ok_or(PayrollError::Invalid("run period end is not a real calendar date".into()))?;
+        // The run's window: its own bounds when it carries a cut-off
+        // (26th→25th is common practice), else the calendar month named by
+        // (period_year, period_month).
+        let (period_start, period_end) = match (run.period_start, run.period_end) {
+            (Some(start), Some(end)) => (start, end),
+            _ => {
+                let start = NaiveDate::from_ymd_opt(run.period_year, month, 1)
+                    .ok_or(PayrollError::Invalid("run period is not a real calendar month".into()))?;
+                // Period end = day before the next month's first (year-rollover safe).
+                let (ny, nm) = if month == 12 { (run.period_year + 1, 1) } else { (run.period_year, month + 1) };
+                let end = NaiveDate::from_ymd_opt(ny, nm, 1)
+                    .and_then(|d| d.pred_opt())
+                    .ok_or(PayrollError::Invalid("run period end is not a real calendar date".into()))?;
+                (start, end)
+            }
+        };
 
         // Fail-closed parameter resolution: the effective set as of the period's first day. A period
         // before any seed date (or a table an operator emptied) refuses rather than zeroing tax.

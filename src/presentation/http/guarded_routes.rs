@@ -84,6 +84,11 @@ struct ComponentBody {
 struct CreateRunBody {
     period_year: i32,
     period_month: i32,
+    /// A non-calendar cut-off (e.g. 26th→25th): both bounds or neither.
+    #[serde(default)]
+    period_start: Option<chrono::NaiveDate>,
+    #[serde(default)]
+    period_end: Option<chrono::NaiveDate>,
     salary_expense_account_id: Uuid,
     salary_payable_account_id: Uuid,
 }
@@ -199,6 +204,8 @@ async fn create_run(
         .create_payroll_entry(NewPayrollEntry {
             period_year: b.period_year,
             period_month: b.period_month,
+                period_start: b.period_start,
+                period_end: b.period_end,
             salary_expense_account_id: b.salary_expense_account_id,
             salary_payable_account_id: b.salary_payable_account_id,
         })

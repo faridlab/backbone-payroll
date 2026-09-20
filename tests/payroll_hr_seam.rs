@@ -130,6 +130,8 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .create(CreateEmploymentDto {
             employee_id: emp.id,
             employment_status: Default::default(),
+            contracted_hours_per_week: Default::default(),
+            punch_required: true,
             join_date: NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
             end_join_date: None,
             department_id: None,
@@ -178,6 +180,9 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .expect("allocate timeoff balance");
     let request = trequest_svc
         .create(CreateTimeoffRequestDto {
+            part: Default::default(),
+            attachment_file_id: None,
+            attachment_note: None,
             timeoff_type_id: unpaid_type.id,
             employee_id: emp.id,
             date_start: leave_start,
@@ -260,6 +265,8 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .unwrap();
     let run = svc
         .create_payroll_entry(pay::NewPayrollEntry {
+            period_start: None,
+            period_end: None,
             period_year: 2026,
             period_month: 7,
             salary_expense_account_id: a.salary_expense,
@@ -365,6 +372,8 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
         .create(CreateEmploymentDto {
             employee_id: emp.id,
             employment_status: Default::default(),
+            contracted_hours_per_week: Default::default(),
+            punch_required: true,
             join_date,
             end_join_date: None,
             department_id: None,
@@ -471,6 +480,8 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
         .unwrap();
     let run = svc
         .create_payroll_entry(pay::NewPayrollEntry {
+            period_start: None,
+            period_end: None,
             period_year: 2026,
             period_month: 7,
             salary_expense_account_id: a.salary_expense,
@@ -607,6 +618,8 @@ async fn joined_this_month(
         .create(CreateEmploymentDto {
             employee_id: emp.id,
             employment_status: Default::default(),
+            contracted_hours_per_week: Default::default(),
+            punch_required: true,
             join_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
             end_join_date: None,
             department_id: None,
@@ -733,6 +746,8 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
     let structure = flat_structure(&svc, a.salary_expense, dec("8700000")).await;
     let run = svc
         .create_payroll_entry(pay::NewPayrollEntry {
+            period_start: None,
+            period_end: None,
             period_year: 2026,
             period_month: 7,
             salary_expense_account_id: a.salary_expense,
@@ -824,6 +839,8 @@ async fn phrseam4_computed_slip_dispatches_on_ter_category() {
     let structure_12m = flat_structure(&svc, a.salary_expense, dec("12000000")).await;
     let run = svc
         .create_payroll_entry(pay::NewPayrollEntry {
+            period_start: None,
+            period_end: None,
             period_year: 2026,
             period_month: 7,
             salary_expense_account_id: a.salary_expense,

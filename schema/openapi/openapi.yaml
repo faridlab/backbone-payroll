@@ -2391,6 +2391,14 @@ components:
           nullable: true
           type: string
           format: uuid
+        period_start:
+          nullable: true
+          type: string
+          format: date
+        period_end:
+          nullable: true
+          type: string
+          format: date
         status:
           type: string
         salary_expense_account_id:
@@ -2456,6 +2464,14 @@ components:
           nullable: true
           type: string
           format: uuid
+        period_start:
+          nullable: true
+          type: string
+          format: date
+        period_end:
+          nullable: true
+          type: string
+          format: date
         status:
           type: string
         salary_expense_account_id:
@@ -2508,6 +2524,14 @@ components:
           nullable: true
           type: string
           format: uuid
+        period_start:
+          nullable: true
+          type: string
+          format: date
+        period_end:
+          nullable: true
+          type: string
+          format: date
         status:
           type: string
         salary_expense_account_id:
@@ -2552,6 +2576,14 @@ components:
           nullable: true
           type: string
           format: uuid
+        period_start:
+          nullable: true
+          type: string
+          format: date
+        period_end:
+          nullable: true
+          type: string
+          format: date
         status:
           type: string
         salary_expense_account_id:

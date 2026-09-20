@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -55,6 +55,8 @@ pub struct PayrollEntry {
     pub period_month: i32,
     pub posting_date: Option<DateTime<Utc>>,
     pub timesheet_approval_id: Option<Uuid>,
+    pub period_start: Option<NaiveDate>,
+    pub period_end: Option<NaiveDate>,
     pub status: PayrollStatus,
     pub salary_expense_account_id: Option<Uuid>,
     pub salary_payable_account_id: Option<Uuid>,
@@ -82,6 +84,8 @@ impl PayrollEntry {
             period_month,
             posting_date: None,
             timesheet_approval_id: None,
+            period_start: None,
+            period_end: None,
             status,
             salary_expense_account_id: None,
             salary_payable_account_id: None,
@@ -166,6 +170,18 @@ impl PayrollEntry {
         self
     }
 
+    /// Set the period_start field (chainable)
+    pub fn with_period_start(mut self, value: NaiveDate) -> Self {
+        self.period_start = Some(value);
+        self
+    }
+
+    /// Set the period_end field (chainable)
+    pub fn with_period_end(mut self, value: NaiveDate) -> Self {
+        self.period_end = Some(value);
+        self
+    }
+
     /// Set the salary_expense_account_id field (chainable)
     pub fn with_salary_expense_account_id(mut self, value: Uuid) -> Self {
         self.salary_expense_account_id = Some(value);
@@ -209,6 +225,12 @@ impl PayrollEntry {
                 }
                 "timesheet_approval_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.timesheet_approval_id = v; }
+                }
+                "period_start" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.period_start = v; }
+                }
+                "period_end" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.period_end = v; }
                 }
                 "status" => {
                     if let Ok(v) = serde_json::from_value(value) { self.status = v; }
@@ -311,6 +333,8 @@ pub struct PayrollEntryBuilder {
     period_month: Option<i32>,
     posting_date: Option<DateTime<Utc>>,
     timesheet_approval_id: Option<Uuid>,
+    period_start: Option<NaiveDate>,
+    period_end: Option<NaiveDate>,
     status: Option<PayrollStatus>,
     salary_expense_account_id: Option<Uuid>,
     salary_payable_account_id: Option<Uuid>,
@@ -343,6 +367,18 @@ impl PayrollEntryBuilder {
     /// Set the timesheet_approval_id field (optional)
     pub fn timesheet_approval_id(mut self, value: Uuid) -> Self {
         self.timesheet_approval_id = Some(value);
+        self
+    }
+
+    /// Set the period_start field (optional)
+    pub fn period_start(mut self, value: NaiveDate) -> Self {
+        self.period_start = Some(value);
+        self
+    }
+
+    /// Set the period_end field (optional)
+    pub fn period_end(mut self, value: NaiveDate) -> Self {
+        self.period_end = Some(value);
         self
     }
 
@@ -407,6 +443,8 @@ impl PayrollEntryBuilder {
             period_month,
             posting_date: self.posting_date,
             timesheet_approval_id: self.timesheet_approval_id,
+            period_start: self.period_start,
+            period_end: self.period_end,
             status: self.status.unwrap_or_default(),
             salary_expense_account_id: self.salary_expense_account_id,
             salary_payable_account_id: self.salary_payable_account_id,

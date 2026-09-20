@@ -49,6 +49,7 @@ async fn setup() -> (sqlx::PgPool, PayrollAccounts, PayrollWriteService, Uuid) {
 
 fn new_run(a: &PayrollAccounts) -> NewPayrollEntry {
     NewPayrollEntry {
+        period_start: None, period_end: None,
         period_year: 2026, period_month: 7,
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }
