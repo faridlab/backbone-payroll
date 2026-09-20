@@ -6,7 +6,7 @@
 //! field rules. Extend in the `// <<< CUSTOM` zone.
 
 use backbone_core::{EntityValidator, ValidationErrors, ValidationError};
-use backbone_core::{NonNegative, RequiredString};
+use backbone_core::{NonNegative, OptionalNotBlank, RequiredString};
 use crate::domain::entity::SalarySlipLine;
 
 /// Validator type alias for SalarySlipLine entities.
@@ -16,6 +16,7 @@ pub type SalarySlipLineValidator = EntityValidator<SalarySlipLine>;
 pub fn salary_slip_line_validator() -> SalarySlipLineValidator {
     EntityValidator::new()
         .rule(RequiredString::new("name", |e: &SalarySlipLine| &e.name))
+        .rule(OptionalNotBlank::new("source_kind", |e: &SalarySlipLine| e.source_kind.as_deref()))
     // <<< CUSTOM RULES
     // END CUSTOM RULES
 }

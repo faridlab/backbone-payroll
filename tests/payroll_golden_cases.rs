@@ -33,8 +33,12 @@ async fn standard_structure(svc: &PayrollWriteService, expense: Uuid) -> Uuid {
 
 fn statutory(a: &PayrollAccounts) -> Vec<StatutoryLine> {
     vec![
-        StatutoryLine { name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable },
-        StatutoryLine { name: "PPh 21".into(), component_type: "deduction".into(), amount: dec("500000"), gl_account_id: a.pph21_payable },
+        StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable },
+        StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "PPh 21".into(), component_type: "deduction".into(), amount: dec("500000"), gl_account_id: a.pph21_payable },
     ]
 }
 
@@ -52,6 +56,7 @@ async fn pgc1_full_month_net_pay() {
     }).await.unwrap();
 
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
     }).await.unwrap();
@@ -91,6 +96,7 @@ async fn pgc2_unpaid_days_prorate_gross() {
     }).await.unwrap();
 
     let slip = svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("2"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
     }).await.unwrap();
@@ -122,6 +128,7 @@ async fn pgc3_run_rollup_and_deduction_grouping() {
 
     for _ in 0..2 {
         svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
             employee_id: Uuid::new_v4(), structure_id: structure,
             working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
         }).await.unwrap();
@@ -160,6 +167,7 @@ async fn pgc4_post_is_idempotent() {
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
     }).await.unwrap();
@@ -190,6 +198,7 @@ async fn pgc5_payroll_posted_carries_payable_breakdown() {
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: statutory(&a),
     }).await.unwrap();

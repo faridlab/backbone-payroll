@@ -9,7 +9,6 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::crud_test_base::{CrudTestConfig, GenericCrudTest, TestDataGenerator};
-use crate::integration::framework::ApiTest;
 use crate::integration::helpers::CommonUtils;
 
 // ============================================================================
@@ -27,6 +26,7 @@ impl TestDataGenerator for PayrollEntryTestData {
             "period_year": 1,
             "period_month": 1,
             "posting_date": null,
+            "timesheet_approval_id": null,
             "status": "draft",
             "salary_expense_account_id": null,
             "salary_payable_account_id": null,
@@ -46,6 +46,7 @@ impl TestDataGenerator for PayrollEntryTestData {
             "period_year": 1,
             "period_month": 1,
             "posting_date": null,
+            "timesheet_approval_id": null,
             "status": "draft",
             "salary_expense_account_id": null,
             "salary_payable_account_id": null,

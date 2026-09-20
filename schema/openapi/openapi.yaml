@@ -2387,6 +2387,10 @@ components:
           nullable: true
           type: string
           format: date-time
+        timesheet_approval_id:
+          nullable: true
+          type: string
+          format: uuid
         status:
           type: string
         salary_expense_account_id:
@@ -2448,6 +2452,10 @@ components:
           nullable: true
           type: string
           format: date-time
+        timesheet_approval_id:
+          nullable: true
+          type: string
+          format: uuid
         status:
           type: string
         salary_expense_account_id:
@@ -2496,6 +2504,10 @@ components:
           nullable: true
           type: string
           format: date-time
+        timesheet_approval_id:
+          nullable: true
+          type: string
+          format: uuid
         status:
           type: string
         salary_expense_account_id:
@@ -2536,6 +2548,10 @@ components:
           nullable: true
           type: string
           format: date-time
+        timesheet_approval_id:
+          nullable: true
+          type: string
+          format: uuid
         status:
           type: string
         salary_expense_account_id:
@@ -2789,6 +2805,14 @@ components:
         gl_account_id:
           type: string
           format: uuid
+        source_kind:
+          nullable: true
+          type: string
+          maxLength: 60
+        source_ref:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -2831,6 +2855,14 @@ components:
         gl_account_id:
           type: string
           format: uuid
+        source_kind:
+          nullable: true
+          type: string
+          maxLength: 60
+        source_ref:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -2860,6 +2892,14 @@ components:
         gl_account_id:
           type: string
           format: uuid
+        source_kind:
+          nullable: true
+          type: string
+          maxLength: 60
+        source_ref:
+          nullable: true
+          type: string
+          format: uuid
         metadata:
           type: object
 
@@ -2879,6 +2919,14 @@ components:
         amount:
           type: string
         gl_account_id:
+          type: string
+          format: uuid
+        source_kind:
+          nullable: true
+          type: string
+          maxLength: 60
+        source_ref:
+          nullable: true
           type: string
           format: uuid
         metadata:

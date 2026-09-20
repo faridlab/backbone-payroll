@@ -30,6 +30,10 @@ models:
       posting_date:
         type: datetime?
         description: "GL posting date (set on post)"
+      timesheet_approval_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The approved timesheet period this run consumed (the provenance join both sides of the handoff were missing)"
       status:
         type: PayrollStatus
         attributes: ["@required", "@default(draft)"]

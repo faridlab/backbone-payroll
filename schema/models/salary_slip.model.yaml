@@ -101,6 +101,14 @@ models:
         type: uuid
         attributes: ["@required", "@exclude_from_foreign_key_check"]
         description: "GL account # logical FK to accounting.Account.id (a payable for deductions)"
+      source_kind:
+        type: string?
+        attributes: ["@max(60)"]
+        description: "What produced the line: attendance_overtime (clock time-debt), timesheet_approved (hours an approver approved), or NULL for structure-computed lines"
+      source_ref:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "The producing record's id (the timesheet approval row for timesheet_approved lines)"
       metadata:
         type: Metadata
         attributes: ["@audit_metadata"]

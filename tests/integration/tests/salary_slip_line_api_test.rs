@@ -4,12 +4,11 @@
 //!
 //! Tests the SalarySlipLine CRUD API endpoints.
 
-use chrono::Utc;
+use crate::integration::framework::ApiTest;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::crud_test_base::{CrudTestConfig, GenericCrudTest, TestDataGenerator};
-use crate::integration::framework::ApiTest;
 use crate::integration::helpers::CommonUtils;
 
 // ============================================================================
@@ -21,7 +20,6 @@ pub struct SalarySlipLineTestData;
 
 impl TestDataGenerator for SalarySlipLineTestData {
     fn generate_create_payload(&self, _utils: &CommonUtils) -> Value {
-        let now = Utc::now().to_rfc3339();
         json!({
             "id": Uuid::new_v4().to_string(),
             "salary_slip_id": Uuid::new_v4().to_string(),
@@ -30,12 +28,13 @@ impl TestDataGenerator for SalarySlipLineTestData {
             "is_statutory": false,
             "amount": 0,
             "gl_account_id": Uuid::new_v4().to_string(),
+            "source_kind": null,
+            "source_ref": null,
             "metadata": json!({}),
         })
     }
 
     fn generate_update_payload(&self, id: &str, _utils: &CommonUtils) -> Value {
-        let now = Utc::now().to_rfc3339();
         json!({
             "id": id,
             "salary_slip_id": Uuid::new_v4().to_string(),
@@ -44,6 +43,8 @@ impl TestDataGenerator for SalarySlipLineTestData {
             "is_statutory": false,
             "amount": 0,
             "gl_account_id": Uuid::new_v4().to_string(),
+            "source_kind": null,
+            "source_ref": null,
             "metadata": json!({}),
         })
     }

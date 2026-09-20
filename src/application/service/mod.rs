@@ -23,6 +23,7 @@ pub mod statutory_calcs;
 // Where a slip's overtime hours come from (attendance owns the time_debt semantics; the pool
 // default mirrors its exported read so payroll works standalone).
 pub mod overtime_port;
+pub mod timesheet_port;
 // Where a slip's employee-side tax facts come from (the employee module owns them; the pool
 // default mirrors its exported read so payroll works standalone).
 pub mod employee_inputs_port;

@@ -42,6 +42,8 @@ pub struct CreatePayrollEntryDto {
     pub period_month: i32,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "posting_date")]
     pub posting_date: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "timesheet_approval_id")]
+    pub timesheet_approval_id: Option<Uuid>,
     pub status: PayrollStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "salary_expense_account_id")]
     pub salary_expense_account_id: Option<Uuid>,
@@ -80,6 +82,8 @@ pub struct UpdatePayrollEntryDto {
     pub period_month: i32,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "posting_date")]
     pub posting_date: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "timesheet_approval_id")]
+    pub timesheet_approval_id: Option<Uuid>,
     pub status: PayrollStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "salary_expense_account_id")]
     pub salary_expense_account_id: Option<Uuid>,
@@ -118,6 +122,8 @@ pub struct PatchPayrollEntryDto {
     pub period_month: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "posting_date")]
     pub posting_date: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "timesheet_approval_id")]
+    pub timesheet_approval_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<PayrollStatus>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "salary_expense_account_id")]
@@ -139,7 +145,7 @@ pub struct PatchPayrollEntryDto {
 impl PatchPayrollEntryDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.period_year.is_some() || self.period_month.is_some() || self.posting_date.is_some() || self.status.is_some() || self.salary_expense_account_id.is_some() || self.salary_payable_account_id.is_some() || self.total_gross.is_some() || self.total_deductions.is_some() || self.total_net.is_some() || self.journal_id.is_some() || self.accounting_post_id.is_some()
+        self.period_year.is_some() || self.period_month.is_some() || self.posting_date.is_some() || self.timesheet_approval_id.is_some() || self.status.is_some() || self.salary_expense_account_id.is_some() || self.salary_payable_account_id.is_some() || self.total_gross.is_some() || self.total_deductions.is_some() || self.total_net.is_some() || self.journal_id.is_some() || self.accounting_post_id.is_some()
     }
 }
 
@@ -162,6 +168,7 @@ pub struct PayrollEntryResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     pub period_month: i32,
     pub posting_date: Option<DateTime<Utc>>,
+    pub timesheet_approval_id: Option<Uuid>,
     pub status: PayrollStatus,
     pub salary_expense_account_id: Option<Uuid>,
     pub salary_payable_account_id: Option<Uuid>,
@@ -244,6 +251,7 @@ impl From<PayrollEntry> for PayrollEntryResponseDto {
             period_year: entity.period_year,
             period_month: entity.period_month,
             posting_date: entity.posting_date,
+            timesheet_approval_id: entity.timesheet_approval_id,
             status: entity.status,
             salary_expense_account_id: entity.salary_expense_account_id,
             salary_payable_account_id: entity.salary_payable_account_id,
@@ -277,6 +285,7 @@ impl From<CreatePayrollEntryDto> for PayrollEntry {
             period_year: dto.period_year,
             period_month: dto.period_month,
             posting_date: dto.posting_date,
+            timesheet_approval_id: dto.timesheet_approval_id,
             status: dto.status,
             salary_expense_account_id: dto.salary_expense_account_id,
             salary_payable_account_id: dto.salary_payable_account_id,
@@ -297,6 +306,7 @@ impl From<&PayrollEntry> for PayrollEntryResponseDto {
             period_year: entity.period_year.clone(),
             period_month: entity.period_month.clone(),
             posting_date: entity.posting_date.clone(),
+            timesheet_approval_id: entity.timesheet_approval_id.clone(),
             status: entity.status.clone(),
             salary_expense_account_id: entity.salary_expense_account_id.clone(),
             salary_payable_account_id: entity.salary_payable_account_id.clone(),
@@ -321,6 +331,7 @@ impl backbone_core::ApplyUpdateDto<UpdatePayrollEntryDto> for PayrollEntry {
         self.period_year = dto.period_year;
         self.period_month = dto.period_month;
         self.posting_date = dto.posting_date;
+        self.timesheet_approval_id = dto.timesheet_approval_id;
         self.status = dto.status;
         self.salary_expense_account_id = dto.salary_expense_account_id;
         self.salary_payable_account_id = dto.salary_payable_account_id;

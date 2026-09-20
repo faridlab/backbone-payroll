@@ -111,6 +111,7 @@ pub struct PayrollEntryDto {
     pub period_year: i32,
     pub period_month: i32,
     pub posting_date: Option<DateTime<Utc>>,
+    pub timesheet_approval_id: Option<Uuid>,
     pub status: PayrollStatus,
     pub salary_expense_account_id: Option<Uuid>,
     pub salary_payable_account_id: Option<Uuid>,
@@ -242,6 +243,8 @@ pub struct SalarySlipLineDto {
     pub is_statutory: bool,
     pub amount: Decimal,
     pub gl_account_id: Uuid,
+    pub source_kind: Option<String>,
+    pub source_ref: Option<Uuid>,
     pub metadata: serde_json::Value,
 }
 

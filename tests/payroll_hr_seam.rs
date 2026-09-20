@@ -227,7 +227,7 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
     // ── 4. Derive unpaid_days from the THREE read-ports (the decomposed period_summary).
     let working_days = calendar.working_days(company, from, to).await.expect("working_days");
     let present = attendance
-        .present_days(company, emp.id, from, to)
+        .present_days(emp.id, from, to)
         .await
         .expect("present_days");
     let paid_leave = timeoff
@@ -277,6 +277,7 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
                 structure_id: structure,
                 working_days: working_days_dec,
                 unpaid_days: unpaid_days_dec,
+                timesheet_approval_id: None,
                 overtime_hours: dec("0"),
                 tax_method: None,
                 statutory: vec![],
@@ -487,6 +488,8 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
     let statutory_lines: Vec<pay::StatutoryLine> = components
         .iter()
         .map(|c| pay::StatutoryLine {
+            source_kind: None,
+            source_ref: None,
             name: c.name.clone(),
             component_type: c.component_type.clone(),
             amount: c.amount,
@@ -506,6 +509,7 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
                 structure_id: structure,
                 working_days: Decimal::from(23),
                 unpaid_days: Decimal::ZERO, // no proration — isolates the statutory effect on net
+                timesheet_approval_id: None,
                 overtime_hours: dec("0"),
                 tax_method: None,
                 statutory: statutory_lines,

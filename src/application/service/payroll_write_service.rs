@@ -160,6 +160,10 @@ pub struct StatutoryLine {
     pub component_type: String, // "earning" | "deduction"
     pub amount: Decimal,
     pub gl_account_id: Uuid, // payable (deduction) or expense (earning) account
+    /// Provenance: what produced the line (NULL = computed from the structure).
+    pub source_kind: Option<&'static str>,
+    /// The producing record's id (e.g. the timesheet approval row).
+    pub source_ref: Option<Uuid>,
 }
 pub struct NewSalarySlip {
     pub employee_id: Uuid,
@@ -173,6 +177,9 @@ pub struct NewSalarySlip {
     /// audit snapshot. The PAY for these hours is an ordinary earning line the caller supplies in
     /// `statutory`/structure lines; the number here only records what the calculation used.
     pub overtime_hours: Decimal,
+    /// The approved timesheet period this slip consumed (provenance; stamped
+    /// on the run row).
+    pub timesheet_approval_id: Option<Uuid>,
     /// The PPh-21 path dispatched for this slip (`npwp_brackets` | `ter_a` | `ter_b` | `ter_c`),
     /// stamped on the row for audit. None when no statutory tax path was computed.
     pub tax_method: Option<String>,
@@ -228,6 +235,7 @@ pub struct PayrollWriteService {
     slip_lines: SalarySlipLineRepository,
     params: StatutoryParamsRepository,
     overtime_inputs: Box<dyn OvertimeInputs>,
+    timesheet_inputs: std::sync::RwLock<std::sync::Arc<dyn super::timesheet_port::ApprovedTimesheetInputs>>,
     employee_inputs: Box<dyn EmployeeStatutoryInputs>,
     gl_sink: std::sync::Arc<dyn GlPostSink>,
     event_sink: std::sync::Arc<dyn PayrollEventSink>,
@@ -245,6 +253,8 @@ impl PayrollWriteService {
         // Pool defaults so payroll computes standalone; a host composing the attendance or
         // employee modules overrides with an adapter over their exports (one SQL owner each).
         let overtime_inputs: Box<dyn OvertimeInputs> = Box::new(PoolOvertimeInputs::new(pool.clone()));
+        let timesheet_inputs: std::sync::Arc<dyn super::timesheet_port::ApprovedTimesheetInputs> =
+            std::sync::Arc::new(super::timesheet_port::PoolApprovedTimesheet::new(pool.clone()));
         let employee_inputs: Box<dyn EmployeeStatutoryInputs> =
             Box::new(PoolEmployeeStatutoryInputs::new(pool.clone()));
         Self {
@@ -256,6 +266,7 @@ impl PayrollWriteService {
             slip_lines,
             params,
             overtime_inputs,
+            timesheet_inputs: std::sync::RwLock::new(timesheet_inputs),
             employee_inputs,
             // Module-held seams, fail-closed by default: an unwired deployment's post/remit verbs
             // refuse with the stable seam codes instead of pretending the effect happened.
@@ -270,6 +281,16 @@ impl PayrollWriteService {
     pub fn with_overtime_inputs(mut self, inputs: Box<dyn OvertimeInputs>) -> Self {
         self.overtime_inputs = inputs;
         self
+    }
+
+    /// Wire the approved-timesheet input port (the composing app's adapter
+    /// when it wants the SQL in one place; the pool default reads the
+    /// timesheet tables directly under the fence).
+    pub fn set_timesheet_inputs(
+        &self,
+        inputs: std::sync::Arc<dyn super::timesheet_port::ApprovedTimesheetInputs>,
+    ) {
+        *self.timesheet_inputs.write().expect("timesheet inputs lock poisoned") = inputs;
     }
 
     /// Override where employee statutory facts come from (default: the pool read mirroring the
@@ -406,7 +427,8 @@ impl PayrollWriteService {
             return Err(PayrollError::Invalid("salary structure has no components".into()));
         }
 
-        struct Line { name: String, ct: String, is_statutory: bool, amount: Decimal, account: Uuid }
+        struct Line { name: String, ct: String, is_statutory: bool, amount: Decimal, account: Uuid,
+                      source_kind: Option<&'static str>, source_ref: Option<Uuid> }
         let mut lines: Vec<Line> = Vec::new();
         let (mut gross, mut deductions) = (Decimal::ZERO, Decimal::ZERO);
         for c in &comps {
@@ -416,10 +438,12 @@ impl PayrollWriteService {
             if ct == "earning" {
                 let amt = money(base * factor);
                 gross += amt;
-                lines.push(Line { name: c.name.clone(), ct, is_statutory: false, amount: amt, account });
+                lines.push(Line { name: c.name.clone(), ct, is_statutory: false, amount: amt, account,
+                                  source_kind: None, source_ref: None });
             } else {
                 deductions += base;
-                lines.push(Line { name: c.name.clone(), ct, is_statutory: false, amount: base, account });
+                lines.push(Line { name: c.name.clone(), ct, is_statutory: false, amount: base, account,
+                                  source_kind: None, source_ref: None });
             }
         }
         for st in &s.statutory {
@@ -442,6 +466,8 @@ impl PayrollWriteService {
                 is_statutory: true,
                 amount: amt,
                 account: st.gl_account_id,
+                source_kind: st.source_kind,
+                source_ref: st.source_ref,
             });
         }
         let net = gross - deductions;
@@ -484,7 +510,18 @@ impl PayrollWriteService {
                 is_statutory: l.is_statutory,
                 amount: l.amount,
                 gl_account_id: l.account,
+                source_kind: l.source_kind,
+                source_ref: l.source_ref,
             }).await?;
+        }
+        // The run's provenance stamp: which approved timesheet fed it (the
+        // join the handoff was missing). Rides the same transaction.
+        if let Some(approval) = s.timesheet_approval_id {
+            sqlx::query("UPDATE payroll.payroll_entries SET timesheet_approval_id = $2 WHERE id = $1")
+                .bind(run_id)
+                .bind(approval)
+                .execute(&mut *tx)
+                .await?;
         }
         tx.commit().await?;
         Ok(slip_id)
@@ -560,7 +597,44 @@ impl PayrollWriteService {
                 component_type: "earning".into(),
                 amount: pay,
                 gl_account_id: salary_expense,
+                source_kind: Some("attendance_overtime"),
+                source_ref: None,
             });
+        }
+
+        // The APPROVED-timesheet leg: hours the employee claimed and an
+        // approver signed, priced on the same statutory day ladder and
+        // carrying their provenance (line + run both stamp the approval row).
+        // No approved period contributes nothing — the clock leg above stays
+        // the only overtime source when the timesheet never reached approval.
+        let timesheet_inputs = self
+            .timesheet_inputs
+            .read()
+            .expect("timesheet inputs lock poisoned")
+            .clone();
+        let approved = timesheet_inputs
+            .approved_overtime(r.employee_id, period_start, period_end)
+            .await?;
+        let mut timesheet_approval_id = None;
+        if let Some(a) = approved {
+            let ts_hours: Decimal = a.stretches.iter().map(|(_, h)| *h).sum();
+            if ts_hours > Decimal::ZERO {
+                let mut pay = Decimal::ZERO;
+                for (_, day_hours) in &a.stretches {
+                    pay += statutory_calcs::overtime_pay(*day_hours, gross_monthly, &cfg.overtime)?;
+                }
+                statutory.push(StatutoryLine {
+                    name: "Lembur (jam disetujui)".into(),
+                    component_type: "earning".into(),
+                    amount: pay,
+                    gl_account_id: salary_expense,
+                    source_kind: Some("timesheet_approved"),
+                    source_ref: Some(a.approval_id),
+                });
+                timesheet_approval_id = Some(a.approval_id);
+            } else {
+                timesheet_approval_id = Some(a.approval_id);
+            }
         }
 
         // Dispatch: the employee's TER category when set, else the progressive-bracket path.
@@ -608,6 +682,8 @@ impl PayrollWriteService {
                 component_type: c.component_type,
                 amount: c.amount,
                 gl_account_id: gl,
+                source_kind: None,
+                source_ref: None,
             });
         }
 
@@ -621,6 +697,7 @@ impl PayrollWriteService {
                 statutory,
                 overtime_hours,
                 tax_method: Some(method.label().to_string()),
+                timesheet_approval_id,
             },
         )
         .await

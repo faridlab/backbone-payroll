@@ -57,6 +57,9 @@ pub struct NewSlipLineRow<'a> {
     pub is_statutory: bool,
     pub amount: Decimal,
     pub gl_account_id: Uuid,
+    /// Provenance (NULL = structure-computed).
+    pub source_kind: Option<&'static str>,
+    pub source_ref: Option<Uuid>,
 }
 
 /// One deduction payable account's total across a run's slips.
@@ -85,11 +88,13 @@ impl SalarySlipLineRepository {
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO payroll.salary_slip_lines
-                 (id, salary_slip_id, name, component_type, is_statutory, amount, gl_account_id)
-               VALUES ($1,$2,$3,$4::component_type,$5,$6,$7)"#,
+                 (id, salary_slip_id, name, component_type, is_statutory, amount, gl_account_id,
+                  source_kind, source_ref)
+               VALUES ($1,$2,$3,$4::component_type,$5,$6,$7,$8,$9)"#,
         )
         .bind(l.id).bind(l.salary_slip_id).bind(l.name).bind(l.component_type)
         .bind(l.is_statutory).bind(l.amount).bind(l.gl_account_id)
+        .bind(l.source_kind).bind(l.source_ref)
         .execute(conn)
         .await?;
         Ok(())

@@ -24,12 +24,17 @@ async fn posted_run(pool: &sqlx::PgPool, svc: &PayrollWriteService, a: &PayrollA
         salary_expense_account_id: a.salary_expense, salary_payable_account_id: a.salary_payable,
     }).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"),
         overtime_hours: dec("0"),
         tax_method: None,
         statutory: vec![
-            StatutoryLine { name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable },
-            StatutoryLine { name: "PPh 21".into(), component_type: "deduction".into(), amount: dec("500000"), gl_account_id: a.pph21_payable },
+            StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable },
+            StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "PPh 21".into(), component_type: "deduction".into(), amount: dec("500000"), gl_account_id: a.pph21_payable },
         ],
     }).await.unwrap();
     svc.process_payroll_entry(run).await.unwrap();

@@ -15,6 +15,10 @@ user_owned:
   - "src/application/service/payroll_gl.rs"
   - "src/application/service/payroll_remittance.rs"
   - "src/application/service/payroll_write_service.rs"
+  # The approved-timesheet input port (provenance for slip overtime lines).
+  - "src/application/service/timesheet_port.rs"
+  - "migrations/20260920093000_slip_source_refs.up.sql"
+  - "migrations/20260920093000_slip_source_refs.down.sql"
   - "src/application/service/statutory_calcs.rs"
   # Where a slip's overtime hours come from — attendance owns the time_debt semantics; the pool
   # default mirrors its exported read so payroll works standalone.

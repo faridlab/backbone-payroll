@@ -44,6 +44,7 @@ pub struct PayrollEntryPaginatedResult {
 /// Filter parameters for list queries
 #[derive(Debug, Clone, Default)]
 pub struct PayrollEntryFilter {
+    pub timesheet_approval_id: Option<Uuid>,
     pub status: Option<PayrollStatus>,
     pub salary_expense_account_id: Option<Uuid>,
     pub salary_payable_account_id: Option<Uuid>,
@@ -54,7 +55,7 @@ pub struct PayrollEntryFilter {
 impl PayrollEntryFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.status.is_some() || self.salary_expense_account_id.is_some() || self.salary_payable_account_id.is_some() || self.journal_id.is_some() || self.accounting_post_id.is_some()
+        self.timesheet_approval_id.is_some() || self.status.is_some() || self.salary_expense_account_id.is_some() || self.salary_payable_account_id.is_some() || self.journal_id.is_some() || self.accounting_post_id.is_some()
     }
 }
 

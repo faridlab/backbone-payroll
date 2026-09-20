@@ -60,11 +60,14 @@ async fn pip1_net_cannot_go_negative() {
     let (_pool, a, svc, structure) = setup().await;
     let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     let r = svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("0"),
         overtime_hours: dec("0"),
         tax_method: None,
-        statutory: vec![StatutoryLine { name: "Loan".into(), component_type: "deduction".into(), amount: dec("6000000"), gl_account_id: a.bpjs_payable }],
+        statutory: vec![StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "Loan".into(), component_type: "deduction".into(), amount: dec("6000000"), gl_account_id: a.bpjs_payable }],
     }).await;
     assert!(matches!(r, Err(PayrollError::Invalid(_))), "deductions > gross must be rejected");
 }
@@ -75,14 +78,17 @@ async fn pip2_no_duplicate_slip_per_employee() {
     let (_pool, a, svc, structure) = setup().await;
     let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     let emp = Uuid::new_v4();
-    let slip = NewSalarySlip { employee_id: emp, structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![] };
-    svc.add_salary_slip(run, NewSalarySlip { ..clone_slip(&slip) }).await.unwrap();
+    let slip = NewSalarySlip {
+            timesheet_approval_id: None, employee_id: emp, structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![] };
+    svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None, ..clone_slip(&slip) }).await.unwrap();
     let dup = svc.add_salary_slip(run, slip).await;
     assert!(matches!(dup, Err(PayrollError::Invalid(_))), "duplicate employee in a run must be rejected");
 }
 
 fn clone_slip(s: &NewSalarySlip) -> NewSalarySlip {
-    NewSalarySlip { employee_id: s.employee_id, structure_id: s.structure_id, working_days: s.working_days, unpaid_days: s.unpaid_days, overtime_hours: dec("0"), tax_method: None, statutory: vec![] }
+    NewSalarySlip {
+            timesheet_approval_id: None, employee_id: s.employee_id, structure_id: s.structure_id, working_days: s.working_days, unpaid_days: s.unpaid_days, overtime_hours: dec("0"), tax_method: None, statutory: vec![] }
 }
 
 // PIP-3 — cannot post a run that has not been processed (still draft).
@@ -91,6 +97,7 @@ async fn pip3_cannot_post_unprocessed_run() {
     let (_pool, a, svc, structure) = setup().await;
     let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
     }).await.unwrap();
     let r = svc.post_payroll_entry(run, today(), &CountingGl::new(), &LoggingSink).await;
@@ -113,6 +120,7 @@ async fn pip5_transition_gates_are_one_way() {
     let (_pool, a, svc, structure) = setup().await;
     let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
     }).await.unwrap();
     svc.process_payroll_entry(run).await.unwrap();
@@ -121,6 +129,7 @@ async fn pip5_transition_gates_are_one_way() {
     assert!(matches!(reprocess, Err(PayrollError::InvalidState(_))), "cannot re-process");
 
     let late_slip = svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
     }).await;
     assert!(matches!(late_slip, Err(PayrollError::InvalidState(_))), "cannot add a slip after processing");
@@ -146,6 +155,7 @@ async fn pip7_negative_unpaid_days_cannot_inflate_gross() {
     let (pool, a, svc, structure) = setup().await;
     let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     let slip = svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure,
         working_days: dec("22"), unpaid_days: dec("-5"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
     }).await.expect("negative unpaid days must be clamped, not rejected mid-insert");
@@ -165,8 +175,11 @@ async fn pip8_remit_requires_a_posted_run() {
     assert!(matches!(draft, Err(PayrollError::InvalidState(_))), "draft run cannot remit");
 
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None,
-        statutory: vec![StatutoryLine { name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable }],
+        statutory: vec![StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable }],
     }).await.unwrap();
     svc.process_payroll_entry(run).await.unwrap();
     let processed = svc.remit_payroll_entry(run, &CapturingRemit::new()).await;
@@ -183,8 +196,11 @@ async fn pip9_unwired_seams_refuse_with_stable_codes() {
     // GL: post through the module-held (default-Unwired) sink.
     let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None,
-        statutory: vec![StatutoryLine { name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable }],
+        statutory: vec![StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable }],
     }).await.unwrap();
     svc.process_payroll_entry(run).await.unwrap();
     let gl = svc.post_run(run, today()).await;
@@ -222,10 +238,15 @@ async fn pip10_remit_idempotency_key_covers_each_payable() {
     let (_pool, a, svc, structure) = setup().await;
     let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None,
         statutory: vec![
-            StatutoryLine { name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable },
-            StatutoryLine { name: "PPh 21".into(), component_type: "deduction".into(), amount: dec("500000"), gl_account_id: a.pph21_payable },
+            StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "BPJS".into(), component_type: "deduction".into(), amount: dec("240000"), gl_account_id: a.bpjs_payable },
+            StatutoryLine {
+            source_kind: None,
+            source_ref: None, name: "PPh 21".into(), component_type: "deduction".into(), amount: dec("500000"), gl_account_id: a.pph21_payable },
         ],
     }).await.unwrap();
     svc.process_payroll_entry(run).await.unwrap();
@@ -258,6 +279,7 @@ async fn pip11_already_posted_run_republishes_the_event() {
     let (_pool, a, svc, structure) = setup().await;
     let run = svc.create_payroll_entry(new_run(&a)).await.unwrap();
     svc.add_salary_slip(run, NewSalarySlip {
+            timesheet_approval_id: None,
         employee_id: Uuid::new_v4(), structure_id: structure, working_days: dec("22"), unpaid_days: dec("0"), overtime_hours: dec("0"), tax_method: None, statutory: vec![],
     }).await.unwrap();
     svc.process_payroll_entry(run).await.unwrap();

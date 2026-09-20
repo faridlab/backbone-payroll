@@ -54,6 +54,7 @@ pub struct PayrollEntry {
     pub period_year: i32,
     pub period_month: i32,
     pub posting_date: Option<DateTime<Utc>>,
+    pub timesheet_approval_id: Option<Uuid>,
     pub status: PayrollStatus,
     pub salary_expense_account_id: Option<Uuid>,
     pub salary_payable_account_id: Option<Uuid>,
@@ -80,6 +81,7 @@ impl PayrollEntry {
             period_year,
             period_month,
             posting_date: None,
+            timesheet_approval_id: None,
             status,
             salary_expense_account_id: None,
             salary_payable_account_id: None,
@@ -158,6 +160,12 @@ impl PayrollEntry {
         self
     }
 
+    /// Set the timesheet_approval_id field (chainable)
+    pub fn with_timesheet_approval_id(mut self, value: Uuid) -> Self {
+        self.timesheet_approval_id = Some(value);
+        self
+    }
+
     /// Set the salary_expense_account_id field (chainable)
     pub fn with_salary_expense_account_id(mut self, value: Uuid) -> Self {
         self.salary_expense_account_id = Some(value);
@@ -198,6 +206,9 @@ impl PayrollEntry {
                 }
                 "posting_date" => {
                     if let Ok(v) = serde_json::from_value(value) { self.posting_date = v; }
+                }
+                "timesheet_approval_id" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.timesheet_approval_id = v; }
                 }
                 "status" => {
                     if let Ok(v) = serde_json::from_value(value) { self.status = v; }
@@ -277,6 +288,7 @@ impl backbone_orm::EntityRepoMeta for PayrollEntry {
     fn column_types() -> std::collections::HashMap<String, String> {
         let mut m = std::collections::HashMap::new();
         m.insert("id".to_string(), "uuid".to_string());
+        m.insert("timesheet_approval_id".to_string(), "uuid".to_string());
         m.insert("salary_expense_account_id".to_string(), "uuid".to_string());
         m.insert("salary_payable_account_id".to_string(), "uuid".to_string());
         m.insert("journal_id".to_string(), "uuid".to_string());
@@ -298,6 +310,7 @@ pub struct PayrollEntryBuilder {
     period_year: Option<i32>,
     period_month: Option<i32>,
     posting_date: Option<DateTime<Utc>>,
+    timesheet_approval_id: Option<Uuid>,
     status: Option<PayrollStatus>,
     salary_expense_account_id: Option<Uuid>,
     salary_payable_account_id: Option<Uuid>,
@@ -324,6 +337,12 @@ impl PayrollEntryBuilder {
     /// Set the posting_date field (optional)
     pub fn posting_date(mut self, value: DateTime<Utc>) -> Self {
         self.posting_date = Some(value);
+        self
+    }
+
+    /// Set the timesheet_approval_id field (optional)
+    pub fn timesheet_approval_id(mut self, value: Uuid) -> Self {
+        self.timesheet_approval_id = Some(value);
         self
     }
 
@@ -387,6 +406,7 @@ impl PayrollEntryBuilder {
             period_year,
             period_month,
             posting_date: self.posting_date,
+            timesheet_approval_id: self.timesheet_approval_id,
             status: self.status.unwrap_or_default(),
             salary_expense_account_id: self.salary_expense_account_id,
             salary_payable_account_id: self.salary_payable_account_id,

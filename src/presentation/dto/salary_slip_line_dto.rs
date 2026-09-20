@@ -49,6 +49,11 @@ pub struct CreateSalarySlipLineDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "gl_account_id")]
     pub gl_account_id: Uuid,
+    #[cfg_attr(feature = "validation", validate(length(max = 60)))]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "source_kind")]
+    pub source_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "source_ref")]
+    pub source_ref: Option<Uuid>,
 }
 
 // =============================================================================
@@ -79,6 +84,11 @@ pub struct UpdateSalarySlipLineDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "gl_account_id")]
     pub gl_account_id: Uuid,
+    #[cfg_attr(feature = "validation", validate(length(max = 60)))]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "source_kind")]
+    pub source_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "source_ref")]
+    pub source_ref: Option<Uuid>,
 }
 
 // =============================================================================
@@ -111,12 +121,17 @@ pub struct PatchSalarySlipLineDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "gl_account_id")]
     pub gl_account_id: Option<Uuid>,
+    #[cfg_attr(feature = "validation", validate(length(max = 60)))]
+    #[serde(skip_serializing_if = "Option::is_none", alias = "source_kind")]
+    pub source_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "source_ref")]
+    pub source_ref: Option<Uuid>,
 }
 
 impl PatchSalarySlipLineDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.salary_slip_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.is_statutory.is_some() || self.amount.is_some() || self.gl_account_id.is_some()
+        self.salary_slip_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.is_statutory.is_some() || self.amount.is_some() || self.gl_account_id.is_some() || self.source_kind.is_some() || self.source_ref.is_some()
     }
 }
 
@@ -144,6 +159,8 @@ pub struct SalarySlipLineResponseDto {
     pub amount: Decimal,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub gl_account_id: Uuid,
+    pub source_kind: Option<String>,
+    pub source_ref: Option<Uuid>,
     pub metadata: AuditMetadata,
 }
 
@@ -221,6 +238,8 @@ impl From<SalarySlipLine> for SalarySlipLineResponseDto {
             is_statutory: entity.is_statutory,
             amount: entity.amount,
             gl_account_id: entity.gl_account_id,
+            source_kind: entity.source_kind,
+            source_ref: entity.source_ref,
             metadata: entity.metadata,
         }
     }
@@ -249,6 +268,8 @@ impl From<CreateSalarySlipLineDto> for SalarySlipLine {
             is_statutory: dto.is_statutory,
             amount: dto.amount,
             gl_account_id: dto.gl_account_id,
+            source_kind: dto.source_kind,
+            source_ref: dto.source_ref,
             metadata: AuditMetadata::default(),
         }
     }
@@ -264,6 +285,8 @@ impl From<&SalarySlipLine> for SalarySlipLineResponseDto {
             is_statutory: entity.is_statutory.clone(),
             amount: entity.amount.clone(),
             gl_account_id: entity.gl_account_id.clone(),
+            source_kind: entity.source_kind.clone(),
+            source_ref: entity.source_ref.clone(),
             metadata: entity.metadata.clone(),
         }
     }
@@ -283,6 +306,8 @@ impl backbone_core::ApplyUpdateDto<UpdateSalarySlipLineDto> for SalarySlipLine {
         self.is_statutory = dto.is_statutory;
         self.amount = dto.amount;
         self.gl_account_id = dto.gl_account_id;
+        self.source_kind = dto.source_kind;
+        self.source_ref = dto.source_ref;
         Ok(self)
     }
 }

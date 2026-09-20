@@ -49,12 +49,14 @@ pub struct SalarySlipLineFilter {
     pub component_type: Option<ComponentType>,
     pub is_statutory: Option<bool>,
     pub gl_account_id: Option<Uuid>,
+    pub source_kind: Option<String>,
+    pub source_ref: Option<Uuid>,
 }
 
 impl SalarySlipLineFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.salary_slip_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.is_statutory.is_some() || self.gl_account_id.is_some()
+        self.salary_slip_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.is_statutory.is_some() || self.gl_account_id.is_some() || self.source_kind.is_some() || self.source_ref.is_some()
     }
 }
 

@@ -57,6 +57,8 @@ pub struct SalarySlipLine {
     pub is_statutory: bool,
     pub amount: Decimal,
     pub gl_account_id: Uuid,
+    pub source_kind: Option<String>,
+    pub source_ref: Option<Uuid>,
     #[serde(default)]
     #[sqlx(json)]
     pub metadata: AuditMetadata,
@@ -78,6 +80,8 @@ impl SalarySlipLine {
             is_statutory,
             amount,
             gl_account_id,
+            source_kind: None,
+            source_ref: None,
             metadata: AuditMetadata::default(),
         }
     }
@@ -134,6 +138,22 @@ impl SalarySlipLine {
 
 
     // ==========================================================
+    // Fluent Setters (with_* for optional fields)
+    // ==========================================================
+
+    /// Set the source_kind field (chainable)
+    pub fn with_source_kind(mut self, value: String) -> Self {
+        self.source_kind = Some(value);
+        self
+    }
+
+    /// Set the source_ref field (chainable)
+    pub fn with_source_ref(mut self, value: Uuid) -> Self {
+        self.source_ref = Some(value);
+        self
+    }
+
+    // ==========================================================
     // Partial Update
     // ==========================================================
 
@@ -158,6 +178,12 @@ impl SalarySlipLine {
                 }
                 "gl_account_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.gl_account_id = v; }
+                }
+                "source_kind" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.source_kind = v; }
+                }
+                "source_ref" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.source_ref = v; }
                 }
                 _ => {} // ignore unknown fields
             }
@@ -235,6 +261,8 @@ pub struct SalarySlipLineBuilder {
     is_statutory: Option<bool>,
     amount: Option<Decimal>,
     gl_account_id: Option<Uuid>,
+    source_kind: Option<String>,
+    source_ref: Option<Uuid>,
 }
 
 impl SalarySlipLineBuilder {
@@ -274,6 +302,18 @@ impl SalarySlipLineBuilder {
         self
     }
 
+    /// Set the source_kind field (optional)
+    pub fn source_kind(mut self, value: String) -> Self {
+        self.source_kind = Some(value);
+        self
+    }
+
+    /// Set the source_ref field (optional)
+    pub fn source_ref(mut self, value: Uuid) -> Self {
+        self.source_ref = Some(value);
+        self
+    }
+
     /// Build the SalarySlipLine entity
     ///
     /// Returns Err if any required field without a default is missing.
@@ -290,6 +330,8 @@ impl SalarySlipLineBuilder {
             is_statutory: self.is_statutory.unwrap_or(false),
             amount: self.amount.unwrap_or(Decimal::from(0)),
             gl_account_id,
+            source_kind: self.source_kind,
+            source_ref: self.source_ref,
             metadata: AuditMetadata::default(),
         })
     }
