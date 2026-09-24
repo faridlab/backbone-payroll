@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-accounting"
-version = "0.9.10"
+version = "0.9.15"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -243,8 +243,8 @@ dependencies = [
 
 [[package]]
 name = "backbone-attendance"
-version = "0.6.18"
-source = "git+https://github.com/faridlab/backbone-attendance?tag=v0.6.18#eb48cdef27c3a8f98077d8a64de48fc0912906cd"
+version = "0.6.23"
+source = "git+https://github.com/faridlab/backbone-attendance?tag=v0.6.23#23644fef5c040e1248e1fa078c66c884db6efa27"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -278,7 +278,7 @@ dependencies = [
 [[package]]
 name = "backbone-auth"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.28#c0caef7145454db3eaabef6072402229a7c9037a"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.32#e66620a0072d7cf47d60c5bcc3cfcfc1c81c8eb4"
 dependencies = [
  "anyhow",
  "argon2",
@@ -304,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-calendar"
-version = "0.2.17"
+version = "0.2.22"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -338,7 +338,7 @@ dependencies = [
 [[package]]
 name = "backbone-core"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.28#c0caef7145454db3eaabef6072402229a7c9037a"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.32#e66620a0072d7cf47d60c5bcc3cfcfc1c81c8eb4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-employee"
-version = "0.2.15"
+version = "0.2.21"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -399,7 +399,7 @@ dependencies = [
 [[package]]
 name = "backbone-messaging"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.28#c0caef7145454db3eaabef6072402229a7c9037a"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.32#e66620a0072d7cf47d60c5bcc3cfcfc1c81c8eb4"
 dependencies = [
  "async-trait",
  "chrono",
@@ -414,7 +414,7 @@ dependencies = [
 [[package]]
 name = "backbone-orm"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.28#c0caef7145454db3eaabef6072402229a7c9037a"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.32#e66620a0072d7cf47d60c5bcc3cfcfc1c81c8eb4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -433,7 +433,7 @@ dependencies = [
 [[package]]
 name = "backbone-outbox"
 version = "0.2.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.28#c0caef7145454db3eaabef6072402229a7c9037a"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.32#e66620a0072d7cf47d60c5bcc3cfcfc1c81c8eb4"
 dependencies = [
  "chrono",
  "serde",
@@ -445,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-payroll"
-version = "0.3.17"
+version = "0.3.24"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-timeoff"
-version = "0.4.13"
+version = "0.4.19"
 dependencies = [
  "anyhow",
  "async-trait",
