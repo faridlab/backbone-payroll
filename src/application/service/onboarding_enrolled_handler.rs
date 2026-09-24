@@ -211,8 +211,8 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
             else {
                 tracing::warn!(
                     target: "payroll.onboarding_enrolled",
-                    employee_id = %employee_id,
-                    onboarding_id = %onboarding_id,
+                    employee_id = ?employee_id,
+                    onboarding_id = ?onboarding_id,
                     "onboarding enrollment SKIPPED: no starting salary on the employee master — \
                      record base_salary and add the initial compensation change by hand"
                 );
