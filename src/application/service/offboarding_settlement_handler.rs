@@ -85,9 +85,16 @@ impl IntegrationEventHandler for OffboardingSettlementHandler {
         let mut tx = self.pool.begin().await.map_err(map_db)?;
 
         // Tenancy (ADR-0029): the module is tenant-agnostic — relay the ambient org request scope
-        // onto our own transaction so the INSERT passes the composing service's tenancy RLS fence;
-        // an undecorated deployment is unfenced by design.
-        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+        // onto our own transaction so the INSERT passes the composing service's tenancy RLS fence.
+        // A RELAY delivery carries no ambient scope, and the composing decorator's org-unit fill
+        // reads one — without a scope the settlement INSERT dies on the fill's kind guard. Fall
+        // back to the payload's owning company leg (the close knows whose tenant it is — fail
+        // closed when the event names neither).
+        let payload_company: Option<Uuid> = serde_json::from_value(p["company_id"].clone()).ok();
+        let scope = backbone_orm::org_scope::current_org_scope().or_else(|| {
+            payload_company.map(backbone_orm::org_scope::OrgScope::for_company_unit)
+        });
+        if let Some(scope) = scope {
             backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope)
                 .await
                 .map_err(|e| handler_err(format!("org scope bind: {e}")))?;
