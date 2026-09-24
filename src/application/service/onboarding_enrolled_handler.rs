@@ -201,7 +201,22 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
                 .await
                 .map_err(map_db)?;
             }
-            // else: no starting salary recorded yet — claim recorded, no row written (claim-but-skip).
+            // else: no starting salary recorded yet — claim recorded, no row
+            // written (claim-but-skip). A TYPED, VISIBLE skip: the joiner's
+            // first compensation row is permanently absent for this
+            // onboarding, so say so loudly with both ids an operator needs.
+            // (The normal path never lands here anymore: the hire consumer
+            // writes base_salary from the offer, so this marks a hire made
+            // outside recruitment, or an offer with no salary.)
+            else {
+                tracing::warn!(
+                    target: "payroll.onboarding_enrolled",
+                    employee_id = %employee_id,
+                    onboarding_id = %onboarding_id,
+                    "onboarding enrollment SKIPPED: no starting salary on the employee master — \
+                     record base_salary and add the initial compensation change by hand"
+                );
+            }
         }
 
         tx.commit().await.map_err(map_db)?;
