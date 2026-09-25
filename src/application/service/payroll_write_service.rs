@@ -751,6 +751,54 @@ impl PayrollWriteService {
     /// (`Dr Salary Expense (gross) · Cr Salary Payable (net) · Cr Σ deduction-account`), drives the
     /// `GlPostSink` (idempotent per run), then transition-gates `processed → posted` with the journal.
     /// Posts **at most once**. Emits `PayrollPosted`.
+    /// Cancel a run that has not left draft (#605): the month opens for a
+    /// fresh run, the slips go with it. Only `draft` may cancel (posted
+    /// history is immutable — reverse, don't delete); idempotent on an
+    /// already-cancelled row.
+    pub async fn cancel_payroll_entry(
+        &self,
+        run_id: Uuid,
+    ) -> Result<bool, PayrollError> {
+        let mut tx = self.pool.begin().await?;
+        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
+            backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope).await?;
+        }
+        let status: Option<String> = sqlx::query_scalar(
+            "SELECT status::text FROM payroll.payroll_entries WHERE id = $1 FOR UPDATE",
+        )
+        .bind(run_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        match status.as_deref() {
+            None => return Err(PayrollError::NotFound("payroll run")),
+            Some("cancelled") => {
+                tx.rollback().await?;
+                return Ok(false);
+            }
+            Some("draft") => {}
+            Some(other) => {
+                tx.rollback().await?;
+                return Err(PayrollError::Invalid(
+                    format!("run is {other} — only a draft run may be cancelled"),
+                ));
+            }
+        }
+        sqlx::query("DELETE FROM payroll.salary_slip_lines WHERE slip_id IN (SELECT id FROM payroll.salary_slips WHERE payroll_entry_id = $1)")
+            .bind(run_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM payroll.salary_slips WHERE payroll_entry_id = $1")
+            .bind(run_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("UPDATE payroll.payroll_entries SET status = 'cancelled' WHERE id = $1 AND status = 'draft'")
+            .bind(run_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
     pub async fn post_payroll_entry(
         &self,
         run_id: Uuid,

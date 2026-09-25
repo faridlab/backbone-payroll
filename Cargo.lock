@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-employee"
-version = "0.2.22"
+version = "0.2.27"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-timeoff"
-version = "0.4.19"
+version = "0.4.22"
 dependencies = [
  "anyhow",
  "async-trait",

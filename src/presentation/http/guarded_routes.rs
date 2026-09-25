@@ -254,6 +254,18 @@ async fn process_run(
     }
 }
 
+async fn cancel_run(
+    State(svc): State<Arc<PayrollWriteService>>,
+    _org: OrgContext,
+    Path(run_id): Path<Uuid>,
+) -> axum::response::Response {
+    match svc.cancel_payroll_entry(run_id).await {
+        Ok(true) => (StatusCode::OK, Json(serde_json::json!({ "status": "cancelled" }))).into_response(),
+        Ok(false) => (StatusCode::OK, Json(serde_json::json!({ "status": "cancelled", "already": true }))).into_response(),
+        Err(e) => err_response(e),
+    }
+}
+
 async fn post_run(
     State(svc): State<Arc<PayrollWriteService>>,
     _org: OrgContext,
@@ -319,6 +331,7 @@ pub fn create_guarded_payroll_routes(m: &PayrollModule) -> Router {
         .route("/payroll-entries/:id/slips", post(add_computed_slip))
         .route("/payroll-entries/:id/process", post(process_run))
         .route("/payroll-entries/:id/post", post(post_run))
+        .route("/payroll-entries/:id/cancel", post(cancel_run))
         .route("/payroll-entries/:id/remit", post(remit_run))
         .with_state(m.payroll_write_service());
 
