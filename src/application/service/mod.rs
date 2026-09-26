@@ -19,6 +19,7 @@ pub mod payroll_gl;
 pub mod payroll_events;
 pub mod payroll_remittance;
 pub mod payroll_write_service;
+pub mod payslip_pdf;
 pub mod statutory_calcs;
 // Where a slip's overtime hours come from (attendance owns the time_debt semantics; the pool
 // default mirrors its exported read so payroll works standalone).

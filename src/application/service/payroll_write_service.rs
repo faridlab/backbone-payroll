@@ -751,6 +751,102 @@ impl PayrollWriteService {
     /// (`Dr Salary Expense (gross) · Cr Salary Payable (net) · Cr Σ deduction-account`), drives the
     /// `GlPostSink` (idempotent per run), then transition-gates `processed → posted` with the journal.
     /// Posts **at most once**. Emits `PayrollPosted`.
+    /// Render one slip as a PDF (#553). Published-run gated like the
+    /// self-service read: a slip on a draft or processed run is an
+    /// internal draft, not a promise to the employee.
+    pub async fn render_slip_pdf(&self, slip_id: Uuid) -> Result<Vec<u8>, PayrollError> {
+        let mut tx = self.pool.begin().await?;
+        if let Some(scope) = org_scope::current_org_scope() {
+            org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
+        }
+        use sqlx::Row;
+        let slip = sqlx::query(
+            r#"SELECT s.id, s.employee_id, s.working_days, s.unpaid_days,
+                      s.gross_pay, s.total_deductions, s.net_pay,
+                      p.period_year, p.period_month, p.status::text AS run_status,
+                      e.employee_number, e.first_name, e.last_name,
+                      em.position_id
+                 FROM payroll.salary_slips s
+                 JOIN payroll.payroll_entries p ON p.id = s.payroll_entry_id
+                 JOIN employee.employees e   ON e.id = s.employee_id
+            LEFT JOIN employee.employments em ON em.employee_id = e.id AND em.status = 'active'
+                WHERE s.id = $1
+                  AND p.status IN ('posted', 'remitted')
+                  AND (s.metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(slip_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(slip) = slip else {
+            tx.rollback().await?;
+            return Err(PayrollError::NotFound("published salary slip"));
+        };
+        let lines = sqlx::query(
+            r#"SELECT name, amount, is_statutory
+                 FROM payroll.salary_slip_lines WHERE slip_id = $1
+                ORDER BY id"#,
+        )
+        .bind(slip_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        let position: Option<String> = match slip.try_get::<Option<Uuid>, _>("position_id") {
+            Ok(Some(pid)) => {
+                sqlx::query_scalar::<_, Option<String>>(
+                    "SELECT name FROM organization.positions WHERE id = $1",
+                )
+                .bind(pid)
+                .fetch_optional(&mut *tx)
+                .await?
+                .flatten()
+            }
+            _ => None,
+        };
+        tx.commit().await?;
+
+        let mut earnings = Vec::new();
+        let mut deductions = Vec::new();
+        for l in &lines {
+            let row = super::payslip_pdf::SlipRow {
+                label: l.try_get::<String, _>("name")?,
+                amount: l.try_get::<rust_decimal::Decimal, _>("amount")?,
+                statutory: l.try_get::<bool, _>("is_statutory")?,
+            };
+            deductions.push(row);
+        }
+        // The lines carry deductions (the slip's net math); earnings show
+        // the gross roll-up when no named lines exist.
+        if deductions.is_empty() {
+            earnings.push(super::payslip_pdf::SlipRow {
+                label: "Salary".to_string(),
+                amount: slip.try_get::<rust_decimal::Decimal, _>("gross_pay")?,
+                statutory: false,
+            });
+        }
+        let first = slip.try_get::<String, _>("first_name")?;
+        let last = slip
+            .try_get::<Option<String>, _>("last_name")?
+            .unwrap_or_default();
+        let input = super::payslip_pdf::PayslipPdfInput {
+            company_name: "Serpa".to_string(),
+            period: format!(
+                "{}-{:02}",
+                slip.try_get::<i32, _>("period_year")?,
+                slip.try_get::<i32, _>("period_month")?
+            ),
+            employee_number: slip.try_get::<String, _>("employee_number")?,
+            employee_name: format!("{} {}", first, last).trim().to_string(),
+            position_title: position,
+            working_days: slip.try_get::<rust_decimal::Decimal, _>("working_days")?,
+            unpaid_days: slip.try_get::<rust_decimal::Decimal, _>("unpaid_days")?,
+            gross_pay: slip.try_get::<rust_decimal::Decimal, _>("gross_pay")?,
+            total_deductions: slip.try_get::<rust_decimal::Decimal, _>("total_deductions")?,
+            net_pay: slip.try_get::<rust_decimal::Decimal, _>("net_pay")?,
+            earnings,
+            deductions,
+        };
+        Ok(super::payslip_pdf::render_payslip_pdf(&input))
+    }
+
     /// Cancel a run that has not left draft (#605): the month opens for a
     /// fresh run, the slips go with it. Only `draft` may cancel (posted
     /// history is immutable — reverse, don't delete); idempotent on an
