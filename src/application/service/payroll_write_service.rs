@@ -771,7 +771,7 @@ impl PayrollWriteService {
                  JOIN employee.employees e   ON e.id = s.employee_id
             LEFT JOIN employee.employments em ON em.employee_id = e.id AND em.status = 'active'
                 WHERE s.id = $1
-                  AND p.status IN ('posted', 'remitted')
+                  AND p.status = 'posted'
                   AND (s.metadata->>'deleted_at') IS NULL"#,
         )
         .bind(slip_id)
