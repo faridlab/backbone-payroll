@@ -783,7 +783,7 @@ impl PayrollWriteService {
         };
         let lines = sqlx::query(
             r#"SELECT name, amount, is_statutory
-                 FROM payroll.salary_slip_lines WHERE slip_id = $1
+                 FROM payroll.salary_slip_lines WHERE salary_slip_id = $1
                 ORDER BY id"#,
         )
         .bind(slip_id)
