@@ -775,23 +775,30 @@ impl PayrollWriteService {
                 tx.rollback().await?;
                 return Ok(false);
             }
-            Some("draft") => {}
+            Some("draft") => {
+                // Draft: the slips go with the run, the month reopens.
+                sqlx::query("DELETE FROM payroll.salary_slip_lines WHERE slip_id IN (SELECT id FROM payroll.salary_slips WHERE payroll_entry_id = $1)")
+                    .bind(run_id)
+                    .execute(&mut *tx)
+                    .await?;
+                sqlx::query("DELETE FROM payroll.salary_slips WHERE payroll_entry_id = $1")
+                    .bind(run_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            // Processed (computed, reviewed, NOT yet posted): the run
+            // closes without touching the GL — nothing was posted, so
+            // there is nothing to reverse (#615). The slips stay for the
+            // audit trail and the month reopens for a fresh run.
+            Some("processed") => {}
             Some(other) => {
                 tx.rollback().await?;
                 return Err(PayrollError::Invalid(
-                    format!("run is {other} — only a draft run may be cancelled"),
+                    format!("run is {other} — only a draft or processed run may be cancelled"),
                 ));
             }
         }
-        sqlx::query("DELETE FROM payroll.salary_slip_lines WHERE slip_id IN (SELECT id FROM payroll.salary_slips WHERE payroll_entry_id = $1)")
-            .bind(run_id)
-            .execute(&mut *tx)
-            .await?;
-        sqlx::query("DELETE FROM payroll.salary_slips WHERE payroll_entry_id = $1")
-            .bind(run_id)
-            .execute(&mut *tx)
-            .await?;
-        sqlx::query("UPDATE payroll.payroll_entries SET status = 'cancelled' WHERE id = $1 AND status = 'draft'")
+        sqlx::query("UPDATE payroll.payroll_entries SET status = 'cancelled' WHERE id = $1 AND status IN ('draft', 'processed')")
             .bind(run_id)
             .execute(&mut *tx)
             .await?;
