@@ -46,6 +46,9 @@ pub struct CreateSalaryComponentDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "gl_account_id")]
     pub gl_account_id: Uuid,
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(alias = "is_statutory")]
+    pub is_statutory: bool,
 }
 
 // =============================================================================
@@ -73,6 +76,9 @@ pub struct UpdateSalaryComponentDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "gl_account_id")]
     pub gl_account_id: Uuid,
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(alias = "is_statutory")]
+    pub is_statutory: bool,
 }
 
 // =============================================================================
@@ -102,12 +108,15 @@ pub struct PatchSalaryComponentDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "gl_account_id")]
     pub gl_account_id: Option<Uuid>,
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(skip_serializing_if = "Option::is_none", alias = "is_statutory")]
+    pub is_statutory: Option<bool>,
 }
 
 impl PatchSalaryComponentDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.structure_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.amount.is_some() || self.gl_account_id.is_some()
+        self.structure_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.amount.is_some() || self.gl_account_id.is_some() || self.is_statutory.is_some()
     }
 }
 
@@ -133,6 +142,8 @@ pub struct SalaryComponentResponseDto {
     pub amount: Decimal,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub gl_account_id: Uuid,
+    #[cfg_attr(feature = "openapi", schema(example = true))]
+    pub is_statutory: bool,
     pub metadata: AuditMetadata,
 }
 
@@ -209,6 +220,7 @@ impl From<SalaryComponent> for SalaryComponentResponseDto {
             component_type: entity.component_type,
             amount: entity.amount,
             gl_account_id: entity.gl_account_id,
+            is_statutory: entity.is_statutory,
             metadata: entity.metadata,
         }
     }
@@ -236,6 +248,7 @@ impl From<CreateSalaryComponentDto> for SalaryComponent {
             component_type: dto.component_type,
             amount: dto.amount,
             gl_account_id: dto.gl_account_id,
+            is_statutory: dto.is_statutory,
             metadata: AuditMetadata::default(),
         }
     }
@@ -250,6 +263,7 @@ impl From<&SalaryComponent> for SalaryComponentResponseDto {
             component_type: entity.component_type.clone(),
             amount: entity.amount.clone(),
             gl_account_id: entity.gl_account_id.clone(),
+            is_statutory: entity.is_statutory.clone(),
             metadata: entity.metadata.clone(),
         }
     }
@@ -268,6 +282,7 @@ impl backbone_core::ApplyUpdateDto<UpdateSalaryComponentDto> for SalaryComponent
         self.component_type = dto.component_type;
         self.amount = dto.amount;
         self.gl_account_id = dto.gl_account_id;
+        self.is_statutory = dto.is_statutory;
         Ok(self)
     }
 }

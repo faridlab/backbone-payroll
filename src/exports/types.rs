@@ -363,6 +363,7 @@ pub struct SalaryComponentDto {
     pub component_type: ComponentType,
     pub amount: Decimal,
     pub gl_account_id: Uuid,
+    pub is_statutory: bool,
     pub metadata: serde_json::Value,
 }
 

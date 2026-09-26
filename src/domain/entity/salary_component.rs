@@ -56,6 +56,7 @@ pub struct SalaryComponent {
     pub component_type: ComponentType,
     pub amount: Decimal,
     pub gl_account_id: Uuid,
+    pub is_statutory: bool,
     #[serde(default)]
     #[sqlx(json)]
     pub metadata: AuditMetadata,
@@ -68,7 +69,7 @@ impl SalaryComponent {
     }
 
     /// Create a new SalaryComponent with required fields
-    pub fn new(structure_id: Uuid, name: String, component_type: ComponentType, amount: Decimal, gl_account_id: Uuid) -> Self {
+    pub fn new(structure_id: Uuid, name: String, component_type: ComponentType, amount: Decimal, gl_account_id: Uuid, is_statutory: bool) -> Self {
         Self {
             id: Uuid::new_v4(),
             structure_id,
@@ -76,6 +77,7 @@ impl SalaryComponent {
             component_type,
             amount,
             gl_account_id,
+            is_statutory,
             metadata: AuditMetadata::default(),
         }
     }
@@ -154,6 +156,9 @@ impl SalaryComponent {
                 "gl_account_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.gl_account_id = v; }
                 }
+                "is_statutory" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.is_statutory = v; }
+                }
                 _ => {} // ignore unknown fields
             }
         }
@@ -229,6 +234,7 @@ pub struct SalaryComponentBuilder {
     component_type: Option<ComponentType>,
     amount: Option<Decimal>,
     gl_account_id: Option<Uuid>,
+    is_statutory: Option<bool>,
 }
 
 impl SalaryComponentBuilder {
@@ -262,6 +268,12 @@ impl SalaryComponentBuilder {
         self
     }
 
+    /// Set the is_statutory field (default: `false`)
+    pub fn is_statutory(mut self, value: bool) -> Self {
+        self.is_statutory = Some(value);
+        self
+    }
+
     /// Build the SalaryComponent entity
     ///
     /// Returns Err if any required field without a default is missing.
@@ -277,6 +289,7 @@ impl SalaryComponentBuilder {
             component_type: self.component_type.unwrap_or_default(),
             amount: self.amount.unwrap_or(Decimal::from(0)),
             gl_account_id,
+            is_statutory: self.is_statutory.unwrap_or(false),
             metadata: AuditMetadata::default(),
         })
     }

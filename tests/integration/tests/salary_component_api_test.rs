@@ -27,6 +27,7 @@ impl TestDataGenerator for SalaryComponentTestData {
             "component_type": "earning",
             "amount": 0,
             "gl_account_id": Uuid::new_v4().to_string(),
+            "is_statutory": false,
             "metadata": json!({}),
         })
     }
@@ -39,6 +40,7 @@ impl TestDataGenerator for SalaryComponentTestData {
             "component_type": "earning",
             "amount": 0,
             "gl_account_id": Uuid::new_v4().to_string(),
+            "is_statutory": false,
             "metadata": json!({}),
         })
     }

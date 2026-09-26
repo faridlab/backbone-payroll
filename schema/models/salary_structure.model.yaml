@@ -65,6 +65,10 @@ models:
         type: uuid
         attributes: ["@required", "@exclude_from_foreign_key_check"]
         description: "GL account # logical FK to accounting.Account.id (expense for earnings, payable for deductions)"
+      is_statutory:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "This component is a statutory deduction (BPJS, PPh 21) — the split between what the state takes and what the company deducts is visible on the structure before a slip is produced. The slip line keeps its own copy for historically accurate runs when the rules change."
       metadata:
         type: Metadata
         attributes: ["@audit_metadata"]

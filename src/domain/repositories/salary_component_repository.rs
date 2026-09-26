@@ -48,12 +48,13 @@ pub struct SalaryComponentFilter {
     pub name: Option<String>,
     pub component_type: Option<ComponentType>,
     pub gl_account_id: Option<Uuid>,
+    pub is_statutory: Option<bool>,
 }
 
 impl SalaryComponentFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.structure_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.gl_account_id.is_some()
+        self.structure_id.is_some() || self.name.is_some() || self.component_type.is_some() || self.gl_account_id.is_some() || self.is_statutory.is_some()
     }
 }
 

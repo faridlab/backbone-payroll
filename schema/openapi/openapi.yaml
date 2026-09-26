@@ -3066,6 +3066,7 @@ components:
         - component_type
         - amount
         - gl_account_id
+        - is_statutory
         - metadata
       properties:
         id:
@@ -3084,6 +3085,8 @@ components:
         gl_account_id:
           type: string
           format: uuid
+        is_statutory:
+          type: boolean
         metadata:
           type: object
 
@@ -3108,6 +3111,7 @@ components:
         - component_type
         - amount
         - gl_account_id
+        - is_statutory
         - metadata
       properties:
         structure_id:
@@ -3123,6 +3127,8 @@ components:
         gl_account_id:
           type: string
           format: uuid
+        is_statutory:
+          type: boolean
         metadata:
           type: object
 
@@ -3134,6 +3140,7 @@ components:
         - component_type
         - amount
         - gl_account_id
+        - is_statutory
         - metadata
       properties:
         structure_id:
@@ -3149,6 +3156,8 @@ components:
         gl_account_id:
           type: string
           format: uuid
+        is_statutory:
+          type: boolean
         metadata:
           type: object
 
@@ -3168,6 +3177,8 @@ components:
         gl_account_id:
           type: string
           format: uuid
+        is_statutory:
+          type: boolean
         metadata:
           type: object
 

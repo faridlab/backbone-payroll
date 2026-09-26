@@ -316,10 +316,6 @@ impl backbone_orm::EntityRepoMeta for PayrollEntry {
         m.insert("journal_id".to_string(), "uuid".to_string());
         m.insert("accounting_post_id".to_string(), "uuid".to_string());
         m.insert("status".to_string(), "payroll_status".to_string());
-        // Integer cast hints: without them a filter like periodYear[eq]=2026
-        // binds text and Postgres has no implicit integer-vs-text operator.
-        m.insert("period_year".to_string(), "integer".to_string());
-        m.insert("period_month".to_string(), "integer".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
