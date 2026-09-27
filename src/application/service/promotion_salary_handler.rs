@@ -41,6 +41,13 @@ pub struct PromotionSalaryHandler {
 }
 
 impl PromotionSalaryHandler {
+    /// The database this consumer writes on: the relay binds the tenant's
+    /// pool as the request pool for the whole consumer call (ADR-0029 pool
+    /// law); the composed pool is the fallback.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     /// Create a new handler bound to the given pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -63,7 +70,7 @@ impl IntegrationEventHandler for PromotionSalaryHandler {
             .ok()
             .and_then(|s| s.parse().ok());
 
-        let mut tx = self.pool.begin().await.map_err(map_db)?;
+        let mut tx = self.rpool().begin().await.map_err(map_db)?;
 
         // Tenancy (ADR-0029): the module is tenant-agnostic — relay the ambient org request scope
         // onto our own transaction so the INSERT passes the composing service's tenancy RLS fence;

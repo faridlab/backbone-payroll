@@ -346,4 +346,13 @@ pub fn create_guarded_payroll_routes(m: &PayrollModule) -> Router {
         .merge(create_salary_structure_routes(m.salary_structure_service.clone()))
         .merge(create_salary_component_routes(m.salary_component_service.clone()))
         .merge(writes)
+
+    // Bind the composer's request pool (ADR-0029 pool law) for every verb
+    // below: under a tenant mount the writes go to the tenant's database.
+    // Applied AFTER the routes — a Router layer only wraps what was
+    // registered before the call.
+    .layer(axum::middleware::from_fn(
+        crate::request_pool::bind_request_pool,
+    ))
+
 }
