@@ -102,7 +102,15 @@ impl IntegrationEventHandler for PromotionSalaryHandler {
                 .bind(effective_date)
                 .bind(promotion_id)
                 .bind("promotion.effective")
-                .bind(backbone_orm::org_scope::current_org_scope().map(|s| s.acting_unit_id()))
+                .bind(
+                    backbone_orm::org_scope::current_org_scope()
+                        .map(|s| s.acting_unit_id())
+                        .or_else(|| {
+                            p.get("company_id")
+                                .and_then(|v| v.as_str())
+                                .and_then(|v| v.parse().ok())
+                        }),
+                )
                 .execute(&mut *tx)
                 .await
                 .map_err(map_db)?;
