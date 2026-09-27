@@ -880,7 +880,7 @@ impl PayrollWriteService {
             }
             Some("draft") => {
                 // Draft: the slips go with the run, the month reopens.
-                sqlx::query("DELETE FROM payroll.salary_slip_lines WHERE slip_id IN (SELECT id FROM payroll.salary_slips WHERE payroll_entry_id = $1)")
+                sqlx::query("DELETE FROM payroll.salary_slip_lines WHERE salary_slip_id IN (SELECT id FROM payroll.salary_slips WHERE payroll_entry_id = $1)")
                     .bind(run_id)
                     .execute(&mut *tx)
                     .await?;
