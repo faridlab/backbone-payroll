@@ -246,6 +246,13 @@ pub struct PayrollWriteService {
 }
 
 impl PayrollWriteService {
+    /// The database this verb runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool (ADR-0029 pool law).
+    /// The repositories are rebuilt per call so every read follows.
+    fn rpool(&self) -> sqlx::PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     pub fn new(pool: PgPool) -> Self {
         let structures = SalaryStructureRepository::new(pool.clone());
         let components = SalaryComponentRepository::new(pool.clone());
@@ -349,7 +356,7 @@ impl PayrollWriteService {
         // Tenancy (ADR-0029): the module is tenant-agnostic. Relay the ambient org request scope
         // onto our own transaction so the structure + component inserts pass the composing
         // service's tenancy RLS fence; an undecorated deployment is unfenced by design.
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = org_scope::current_org_scope() {
             org_scope::bind_org_scope_on(&mut tx, &scope).await?;
         }
@@ -399,7 +406,7 @@ impl PayrollWriteService {
         // by design.
         let r = self
             .entries
-            .insert_entry(&self.pool, &NewPayrollEntryRow {
+            .insert_entry(&self.rpool(), &NewPayrollEntryRow {
                 id,
                 period_year: e.period_year,
                 period_month: e.period_month,
@@ -424,7 +431,7 @@ impl PayrollWriteService {
         // Tenancy (ADR-0029), ID-only pattern: identified by the run id alone. The lookup rides the
         // ambient org request scope — under HTTP the request-dedicated connection carries it, so
         // another unit's run simply isn't found; an undecorated deployment is unfenced by design.
-        let run = self.entries.find_state_by_id(&self.pool, run_id).await?
+        let run = self.entries.find_state_by_id(&self.rpool(), run_id).await?
             .ok_or(PayrollError::NotFound("payroll run"))?;
         if run.status != "draft" {
             return Err(PayrollError::InvalidState("run is not draft"));
@@ -440,7 +447,7 @@ impl PayrollWriteService {
         let factor = (s.working_days - unpaid) / s.working_days; // proration for unpaid days
 
         // Load the structure components.
-        let comps = self.components.list_by_structure(&self.pool, s.structure_id).await?;
+        let comps = self.components.list_by_structure(&self.rpool(), s.structure_id).await?;
         if comps.is_empty() {
             return Err(PayrollError::Invalid("salary structure has no components".into()));
         }
@@ -494,7 +501,7 @@ impl PayrollWriteService {
         }
 
         let slip_id = Uuid::new_v4();
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         // Relay the ambient org request scope onto our own transaction so the slip + line inserts
         // pass the composing service's tenancy RLS fence (ADR-0029); an undecorated deployment is
         // unfenced by design.
@@ -556,7 +563,7 @@ impl PayrollWriteService {
             .filter(|rc| (1..=5).contains(rc))
             .ok_or_else(|| PayrollError::Invalid("risk_class must be 1..=5".into()))?;
         // ID-only read under the request scope (same fence posture as add_salary_slip).
-        let run = self.entries.find_period_by_id(&self.pool, r.run_id).await?
+        let run = self.entries.find_period_by_id(&self.rpool(), r.run_id).await?
             .ok_or(PayrollError::NotFound("payroll run"))?;
         if run.status != "draft" {
             return Err(PayrollError::InvalidState("run is not draft"));
@@ -593,7 +600,7 @@ impl PayrollWriteService {
 
         // Statutory base: the structure's monthly earning total (un-prorated — the salary being
         // paid; proration is a slip-line concern the earnings factor already applies).
-        let comps = self.components.list_by_structure(&self.pool, r.structure_id).await?;
+        let comps = self.components.list_by_structure(&self.rpool(), r.structure_id).await?;
         let gross_monthly: Decimal = comps
             .iter()
             .filter(|c| c.component_type == "earning")
@@ -735,12 +742,12 @@ impl PayrollWriteService {
         // Tenancy (ADR-0029), ID-only pattern: the run id alone identifies the work, so the reads
         // and the transition ride the ambient org request scope — under HTTP the request-dedicated
         // connection carries it; an undecorated deployment is unfenced by design.
-        let totals = self.slips.sum_totals_by_run(&self.pool, run_id).await?;
+        let totals = self.slips.sum_totals_by_run(&self.rpool(), run_id).await?;
         if totals.count == 0 {
             return Err(PayrollError::Invalid("a run needs at least one salary slip".into()));
         }
         let (g, d, n) = (totals.total_gross, totals.total_deductions, totals.total_net);
-        let moved = self.entries.mark_processed(&self.pool, run_id, g, d, n).await?;
+        let moved = self.entries.mark_processed(&self.rpool(), run_id, g, d, n).await?;
         if moved != 1 {
             return Err(PayrollError::InvalidState("run is not draft"));
         }
@@ -755,7 +762,7 @@ impl PayrollWriteService {
     /// self-service read: a slip on a draft or processed run is an
     /// internal draft, not a promise to the employee.
     pub async fn render_slip_pdf(&self, slip_id: Uuid) -> Result<Vec<u8>, PayrollError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = org_scope::current_org_scope() {
             org_scope::bind_org_scope_on(&mut *tx, &scope).await?;
         }
@@ -855,7 +862,7 @@ impl PayrollWriteService {
         &self,
         run_id: Uuid,
     ) -> Result<bool, PayrollError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.rpool().begin().await?;
         if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
             backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope).await?;
         }
@@ -912,7 +919,7 @@ impl PayrollWriteService {
         // Tenancy (ADR-0029), ID-only pattern: identified by the run id alone. The reads ride the
         // ambient org request scope — under HTTP the request-dedicated connection carries it; an
         // undecorated deployment is unfenced by design.
-        let run = self.entries.find_for_posting(&self.pool, run_id).await?
+        let run = self.entries.find_for_posting(&self.rpool(), run_id).await?
             .ok_or(PayrollError::NotFound("payroll run"))?;
         let status = run.status.as_str();
         let total_net = run.total_net;
@@ -952,7 +959,7 @@ impl PayrollWriteService {
 
         // Deductions grouped by their payable account across every slip, carrying whether the account is
         // a statutory payable (routes the settlement consumer's remittance to the right authority).
-        let ded_rows = self.slip_lines.group_deductions_by_account(&self.pool, run_id).await?;
+        let ded_rows = self.slip_lines.group_deductions_by_account(&self.rpool(), run_id).await?;
 
         // Build the balanced posting: Dr Expense (gross) · Cr Payable (net) · Cr each deduction account.
         // The same grouping becomes the payable breakdown on PayrollPosted (settlement's input).
@@ -990,11 +997,11 @@ impl PayrollWriteService {
         );
         let moved = self
             .entries
-            .mark_posted(&self.pool, run_id, posted_at, ack.journal_id, ack.post_id)
+            .mark_posted(&self.rpool(), run_id, posted_at, ack.journal_id, ack.post_id)
             .await?;
         if moved != 1 {
             // Raced — the winner posted; return its journal.
-            let j: Uuid = self.entries.fetch_journal_id(&self.pool, run_id).await?;
+            let j: Uuid = self.entries.fetch_journal_id(&self.rpool(), run_id).await?;
             return Ok(PostOutcome { payroll_entry_id: run_id, journal_id: j, post_id: ack.post_id, total_net, already: true });
         }
         events
@@ -1012,7 +1019,7 @@ impl PayrollWriteService {
     /// the shared source for the already-posted re-publish and the remit verb, so both describe
     /// the SAME obligations the posted journal credited.
     async fn payables_for_run(&self, run_id: Uuid) -> Result<Vec<PayrollPayable>, PayrollError> {
-        let ded_rows = self.slip_lines.group_deductions_by_account(&self.pool, run_id).await?;
+        let ded_rows = self.slip_lines.group_deductions_by_account(&self.rpool(), run_id).await?;
         Ok(ded_rows
             .into_iter()
             .filter(|r| r.amount > Decimal::ZERO)
@@ -1032,7 +1039,7 @@ impl PayrollWriteService {
         sink: &dyn RemittanceSink,
     ) -> Result<RemitOutcome, PayrollError> {
         // Tenancy (ADR-0029), ID-only pattern — see post_payroll_entry.
-        let run = self.entries.find_for_posting(&self.pool, run_id).await?
+        let run = self.entries.find_for_posting(&self.rpool(), run_id).await?
             .ok_or(PayrollError::NotFound("payroll run"))?;
         if run.status.as_str() != "posted" {
             return Err(PayrollError::InvalidState("run is not posted"));

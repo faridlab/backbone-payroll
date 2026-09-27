@@ -33,6 +33,12 @@ pub struct StatutoryParamsRepository {
 }
 
 impl StatutoryParamsRepository {
+    /// The database this read runs on: the composer's request pool when the
+    /// tenant router installed one, else the composed pool (ADR-0029 pool law).
+    fn rpool(&self) -> PgPool {
+        crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
+    }
+
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -77,7 +83,7 @@ impl StatutoryParamsRepository {
         ))
         .bind(country_code)
         .bind(as_of)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&self.rpool())
         .await?;
         Ok(effective.and_then(|(d,)| d))
     }
@@ -99,7 +105,7 @@ impl StatutoryParamsRepository {
         )
         .bind(country_code)
         .bind(effective)
-        .fetch_all(&self.pool)
+        .fetch_all(&self.rpool())
         .await?;
         let brackets: Vec<Pph21Bracket> = rows
             .into_iter()
@@ -133,7 +139,7 @@ impl StatutoryParamsRepository {
         )
         .bind(country_code)
         .bind(effective)
-        .fetch_all(&self.pool)
+        .fetch_all(&self.rpool())
         .await?;
         let ptkp_map: HashMap<String, Decimal> = rows.into_iter().collect();
         // The tier axis is closed (eight tiers); a set missing any of them is an incomplete
@@ -163,7 +169,7 @@ impl StatutoryParamsRepository {
         )
         .bind(country_code)
         .bind(effective)
-        .fetch_all(&self.pool)
+        .fetch_all(&self.rpool())
         .await?;
         let mut map: HashMap<String, Vec<TerRateBand>> = HashMap::new();
         for (category, _, lower, rate) in rows {
@@ -194,7 +200,7 @@ impl StatutoryParamsRepository {
         )
         .bind(country_code)
         .bind(effective)
-        .fetch_all(&self.pool)
+        .fetch_all(&self.rpool())
         .await?;
 
         let mut kes_employee = None;
@@ -270,7 +276,7 @@ impl StatutoryParamsRepository {
         )
         .bind(country_code)
         .bind(effective)
-        .fetch_all(&self.pool)
+        .fetch_all(&self.rpool())
         .await?;
 
         let mut workday = Vec::new();
