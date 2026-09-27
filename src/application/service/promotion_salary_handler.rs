@@ -92,16 +92,17 @@ impl IntegrationEventHandler for PromotionSalaryHandler {
                 // change_type='promotion' for every promotion-driven comp change; reference_id =
                 // promotion_id is the non-null idempotency link. effective_date carries the move's date.
                 sqlx::query(
-                    r#"INSERT INTO payroll.compensation_changes
-                           (employee_id, change_type, new_amount, effective_date,
-                            reference_id, note)
-                       VALUES ($1, 'promotion'::compensation_change_type, $2, $3, $4, $5)"#,
+                    r#"INSERT INTO payroll.compensation_changes (employee_id, change_type, new_amount, effective_date,
+                            reference_id, note,
+                            org_unit_id)
+                       VALUES ($1, 'promotion'::compensation_change_type, $2, $3, $4, $5, $6::uuid)"#,
                 )
                 .bind(employee_id)
                 .bind(amount)
                 .bind(effective_date)
                 .bind(promotion_id)
                 .bind("promotion.effective")
+                .bind(backbone_orm::org_scope::current_org_scope().map(|s| s.acting_unit_id()))
                 .execute(&mut *tx)
                 .await
                 .map_err(map_db)?;

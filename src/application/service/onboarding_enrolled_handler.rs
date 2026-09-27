@@ -201,16 +201,17 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
                 let period = Utc::now().format("%Y").to_string();
                 let note = format!("onboarding enrollment: initial compensation (period {period})");
                 sqlx::query(
-                    r#"INSERT INTO payroll.compensation_changes
-                           (employee_id, change_type, new_amount, effective_date,
-                            reference_id, note)
-                       VALUES ($1, 'hire'::compensation_change_type, $2, $3, $4, $5)"#,
+                    r#"INSERT INTO payroll.compensation_changes (employee_id, change_type, new_amount, effective_date,
+                            reference_id, note,
+                            org_unit_id)
+                       VALUES ($1, 'hire'::compensation_change_type, $2, $3, $4, $5, $6::uuid)"#,
                 )
                 .bind(employee_id)
                 .bind(amount)
                 .bind(Utc::now().date_naive())
                 .bind(onboarding_id)
                 .bind(&note)
+                .bind(backbone_orm::org_scope::current_org_scope().map(|s| s.acting_unit_id()))
                 .execute(&mut *tx)
                 .await
                 .map_err(map_db)?;

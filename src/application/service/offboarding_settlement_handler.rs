@@ -136,16 +136,17 @@ impl IntegrationEventHandler for OffboardingSettlementHandler {
             // change_type='offboarding' is the dedicated enum variant for this; reference_id =
             // offboarding_id is the non-null idempotency link back to the source workflow.
             sqlx::query(
-                r#"INSERT INTO payroll.compensation_changes
-                       (employee_id, change_type, new_amount, effective_date,
-                        reference_id, note)
-                   VALUES ($1, 'offboarding'::compensation_change_type, $2, $3, $4, $5)"#,
+                r#"INSERT INTO payroll.compensation_changes (employee_id, change_type, new_amount, effective_date,
+                        reference_id, note,
+                            org_unit_id)
+                       VALUES ($1, 'offboarding'::compensation_change_type, $2, $3, $4, $5, $6::uuid)"#,
             )
             .bind(employee_id)
             .bind(amount)
             .bind(last_working_day)
             .bind(offboarding_id)
             .bind(&note)
+                .bind(backbone_orm::org_scope::current_org_scope().map(|s| s.acting_unit_id()))
             .execute(&mut *tx)
             .await
             .map_err(map_db)?;
