@@ -29,3 +29,13 @@ pub async fn bind_request_pool(req: Request<Body>, next: Next) -> Response {
         None => next.run(req).await,
     }
 }
+
+/// Run a future with a pool bound as this module's request pool — the host
+/// relay's per-tenant consumers use this so module-side consumers resolve
+/// the tenant database through their rpool() (ADR-0029 pool law).
+pub async fn with_pool_scope<F: std::future::Future<Output = O>, O>(
+    pool: sqlx::PgPool,
+    fut: F,
+) -> O {
+    REQUEST_POOL.scope(pool, fut).await
+}
