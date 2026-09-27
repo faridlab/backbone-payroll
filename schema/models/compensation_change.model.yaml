@@ -19,6 +19,8 @@ models:
   # service's tenancy decorator owns org scoping for this append-only log.
   - name: CompensationChange
     collection: compensation_changes
+    # Data-change audit capture (ADR-0025): per-row trigger -> auditlog.capture_data_change.
+    audited: true
     description: "Append-only log of compensation changes; payroll-side receiver for lifecycle compound events."
     read_only: true
 
