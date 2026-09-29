@@ -18,7 +18,6 @@
 #![allow(unused_imports)]
 
 // Generated modules
-pub mod request_pool;
 pub mod domain;
 pub mod infrastructure;
 pub mod application;

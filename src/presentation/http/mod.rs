@@ -19,9 +19,9 @@ pub mod guarded_routes;
 // END CUSTOM
 
 // Re-exports
-pub use compensation_change_handler::{create_compensation_change_routes, create_compensation_change_read_routes, create_compensation_change_write_routes};
+pub use compensation_change_handler::{create_compensation_change_routes, create_compensation_change_read_routes, create_compensation_change_write_routes, create_compensation_change_history_route};
 pub use payroll_entry_handler::{create_payroll_entry_routes, create_payroll_entry_read_routes, create_payroll_entry_write_routes};
-pub use salary_slip_handler::{create_salary_slip_routes, create_salary_slip_read_routes, create_salary_slip_write_routes};
+pub use salary_slip_handler::{create_salary_slip_routes, create_salary_slip_read_routes, create_salary_slip_write_routes, create_salary_slip_history_route};
 pub use salary_slip_line_handler::{create_salary_slip_line_routes, create_salary_slip_line_read_routes, create_salary_slip_line_write_routes};
 pub use salary_structure_handler::{create_salary_structure_routes, create_salary_structure_read_routes, create_salary_structure_write_routes};
 pub use salary_component_handler::{create_salary_component_routes, create_salary_component_read_routes, create_salary_component_write_routes};
