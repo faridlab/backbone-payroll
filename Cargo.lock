@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-accounting"
-version = "0.9.18"
+version = "0.9.25"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -304,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-calendar"
-version = "0.2.24"
+version = "0.2.25"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -445,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-payroll"
-version = "0.3.43"
+version = "0.3.44"
 dependencies = [
  "anyhow",
  "async-trait",
