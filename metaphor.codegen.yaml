@@ -11,6 +11,8 @@
 # Add your hand-authored services, handlers, tests, and docs below as you write them.
 
 user_owned:
+  - "src/application/service/payslip_pdf.rs"
+  - "tests/common/mod.rs"
   # The hand-owned request-pool shim (tenant pool resolution): dropped by
   # the regenerator unless declared here.
   - "src/request_pool.rs"

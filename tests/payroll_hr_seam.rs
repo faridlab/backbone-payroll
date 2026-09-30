@@ -123,6 +123,7 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
             marital_status: None,
             blood_type: None,
             religion_id: None,
+            base_salary: None,
         })
         .await
         .expect("create employee");
@@ -159,6 +160,7 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
             code: None,
             is_paid: false,
             allow_carry_forward: false,
+            max_days_per_request: None,
         })
         .await
         .expect("create timeoff type");
@@ -364,6 +366,7 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
             marital_status: None,
             blood_type: None,
             religion_id: None,
+            base_salary: None,
         })
         .await
         .expect("create employee");
@@ -611,6 +614,7 @@ async fn joined_this_month(
             marital_status: None,
             blood_type: None,
             religion_id: None,
+            base_salary: None,
         })
         .await
         .expect("create employee");

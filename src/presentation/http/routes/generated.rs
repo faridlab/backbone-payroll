@@ -72,7 +72,7 @@ pub mod individual {
     use super::*;
 
     pub fn compensation_change_routes(service: Arc<CompensationChangeService>) -> Router {
-        create_compensation_change_routes(service)
+        create_compensation_change_read_routes(service)
     }
 
     pub fn payroll_entry_routes(service: Arc<PayrollEntryService>) -> Router {
