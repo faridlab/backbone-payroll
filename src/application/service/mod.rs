@@ -37,6 +37,9 @@ pub mod offboarding_settlement_handler;
 // compensation_changes row from the joiner's starting salary, idempotently (inbox dedup on the
 // envelope id). Registered on the integration bus in backbone-hr-app's main.rs.
 pub mod onboarding_enrolled_handler;
+// Consumer: recruitment.hired → the new employee's first compensation change (the offered salary,
+// effective on the first day), idempotently.
+pub mod hire_compensation_handler;
 // END CUSTOM
 
 pub use compensation_change_service::CompensationChangeService;
@@ -72,4 +75,5 @@ pub use statutory_calcs::{
 pub use promotion_salary_handler::PromotionSalaryHandler;
 pub use offboarding_settlement_handler::OffboardingSettlementHandler;
 pub use onboarding_enrolled_handler::{OnboardingEnrolledHandler, OnboardingEnrollInputs, PoolOnboardingEnrollInputs};
+pub use hire_compensation_handler::{HireCompensationHandler, HiredEmployeeResolver};
 // END CUSTOM

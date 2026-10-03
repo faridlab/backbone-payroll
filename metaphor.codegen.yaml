@@ -37,6 +37,7 @@ user_owned:
   # ADR-005 consumers: lifecycle event handlers (idempotent inbox consumers).
   - "src/application/service/offboarding_settlement_handler.rs"
   - "src/application/service/onboarding_enrolled_handler.rs"
+  - "src/application/service/hire_compensation_handler.rs"
   - "src/application/service/promotion_salary_handler.rs"
   # Own the hand-written payroll SQL (the structure/run/slip writes, the run roll-up, the deduction
   # grouping the salary journal is built from, and the at-most-once GL post gate) that the write service

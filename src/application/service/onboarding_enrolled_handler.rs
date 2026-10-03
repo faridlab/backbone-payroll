@@ -104,7 +104,7 @@ impl OnboardingEnrollInputs for PoolOnboardingEnrollInputs {
         // one, and the plain pool otherwise. The helper's legacy task-local branch is never taken —
         // this module sets no legacy scope of its own.
         let row: Option<(Option<Decimal>,)> = backbone_orm::company_scope::fetch_optional_scoped(
-            &self.pool,
+            &self.rpool(),
             sqlx::query_as(
                 r#"SELECT base_salary
                      FROM employee.employees
@@ -165,23 +165,33 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
         let p = &envelope.payload;
         let employee_id: Uuid = json_field(p, "employee_id")?;
         let onboarding_id: Option<Uuid> = serde_json::from_value(p["onboarding_id"].clone()).ok();
+        let company: Option<Uuid> = serde_json::from_value(p["company_id"].clone()).ok().flatten();
 
-        // Read the starting salary BEFORE the write tx (a best-effort snapshot read on the pool, the
-        // same pattern as lifecycle's PoolOffboardingInputs). None/0 → claim-but-skip. The read rides
-        // the ambient org request scope the relay holds (see the port impl above).
-        let base_salary = self
-            .inputs
-            .starting_salary(employee_id)
+        // Tenancy (ADR-0029): the module is tenant-agnostic. A caller may have bound an org
+        // request scope; a relay delivery has none, so the payload's owning company stands in —
+        // without a scope the fenced employee read sees no row and the insert has no unit.
+        let scope = backbone_orm::org_scope::current_org_scope()
+            .or_else(|| company.map(backbone_orm::org_scope::OrgScope::for_company_unit));
+        let pool = self.rpool();
+
+        // Read the starting salary BEFORE the write tx (a best-effort snapshot read through the
+        // port). None/0 → claim-but-skip. The read runs inside the scope above on the tenant's
+        // pool, so the default pool-backed port rides that scoped request connection.
+        let base_salary = match scope.clone() {
+            Some(scope) => backbone_orm::org_scope::with_org_request_scope(
+                &pool,
+                scope,
+                self.inputs.starting_salary(employee_id),
+            )
             .await
-            .map_err(map_db)?;
+            .map_err(map_db)?,
+            None => self.inputs.starting_salary(employee_id).await,
+        }
+        .map_err(map_db)?;
 
-        let mut tx = self.rpool().begin().await.map_err(map_db)?;
-
-        // Tenancy (ADR-0029): the module is tenant-agnostic — relay the ambient org request scope
-        // onto our own transaction so the INSERT passes the composing service's tenancy RLS fence;
-        // an undecorated deployment is unfenced by design.
-        if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
-            backbone_orm::org_scope::bind_org_scope_on(&mut tx, &scope)
+        let mut tx = pool.begin().await.map_err(map_db)?;
+        if let Some(scope) = &scope {
+            backbone_orm::org_scope::bind_org_scope_on(&mut tx, scope)
                 .await
                 .map_err(|e| handler_err(format!("org scope bind: {e}")))?;
         }
@@ -192,7 +202,23 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
             .await
             .map_err(|e| handler_err(format!("inbox claim: {e}")))?;
 
-        if first_time {
+        // A joiner who already has a compensation history — a recruitment hire records the
+        // offered salary when the hire lands — keeps it: completing the onboarding adds no second
+        // initial row.
+        let already_compensated: bool = if first_time {
+            sqlx::query_scalar(
+                r#"SELECT EXISTS (SELECT 1 FROM payroll.compensation_changes
+                                   WHERE employee_id = $1 AND (metadata->>'deleted_at') IS NULL)"#,
+            )
+            .bind(employee_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(map_db)?
+        } else {
+            false
+        };
+
+        if first_time && !already_compensated {
             if let Some(amount) = base_salary {
                 // change_type='hire' is the initial-salary variant; reference_id = onboarding_id is the
                 // non-null idempotency link back to the source workflow; effective_date = today (the
@@ -211,7 +237,7 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
                 .bind(Utc::now().date_naive())
                 .bind(onboarding_id)
                 .bind(&note)
-                .bind(backbone_orm::org_scope::current_org_scope().map(|s| s.acting_unit_id()))
+                .bind(scope.as_ref().map(|s| s.acting_unit_id()))
                 .execute(&mut *tx)
                 .await
                 .map_err(map_db)?;
@@ -220,8 +246,8 @@ impl IntegrationEventHandler for OnboardingEnrolledHandler {
             // written (claim-but-skip). A TYPED, VISIBLE skip: the joiner's
             // first compensation row is permanently absent for this
             // onboarding, so say so loudly with both ids an operator needs.
-            // (The normal path never lands here anymore: the hire consumer
-            // writes base_salary from the offer, so this marks a hire made
+            // (A recruitment hire never lands here: its offered salary is
+            // recorded when the hire lands, so this marks a joiner added
             // outside recruitment, or an offer with no salary.)
             else {
                 tracing::warn!(
