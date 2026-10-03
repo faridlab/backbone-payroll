@@ -1,19 +1,26 @@
 //! Consumer for the `offboarding.closed` compound event — settlement side (ADR-005).
 //!
 //! The payroll module owns the APPLY side of the offboarding final settlement: on each
-//! `offboarding.closed` envelope it appends a `compensation_changes` row carrying the REAL 🇮🇩
-//! pesangon total, **idempotently**. Registered on the integration bus in backbone-hr-app's
+//! `offboarding.closed` envelope it appends a `compensation_changes` row carrying the settlement
+//! total, **idempotently**. Registered on the integration bus in backbone-hr-app's
 //! `main.rs` alongside the employee `OffboardingClosedHandler`.
 //!
 //! ## Producer-carried pesangon (no payroll→lifecycle edge)
 //!
-//! The pesangon calc lives in `backbone-lifecycle`. To keep the dependency graph acyclic, payroll
+//! The settlement calc lives in `backbone-lifecycle`. To keep the dependency graph acyclic, payroll
 //! does NOT recompute it — the producer (`OffboardingWriteService::close`) runs the calc and embeds
-//! the full `PesangonBreakdown` in the event payload. This handler just reads the carried breakdown
-//! and writes `compensation_changes` with `change_type='offboarding'`, `new_amount=breakdown.total`,
-//! and a note carrying every component (pesangon / UPMK / UPM / unused-leave payout) so the row is
-//! self-describing on a payslip. Idempotent via `inbox::once` on the event id (preserved from the
-//! outbox row id through the relay).
+//! the breakdown in the event payload. This handler just reads the carried breakdown and writes
+//! `compensation_changes` with `change_type='offboarding'`, `new_amount=breakdown.total` (the
+//! settlement's net payable: severance items + unused-leave payout, without the last pay, which
+//! the final payroll run pays), and a note naming every item so the row is self-describing.
+//! Idempotent via `inbox::once` on the event id (preserved from the outbox row id through the
+//! relay).
+//!
+//! Two payload generations are read. The itemised one (PP 35/2021) carries `uang_pesangon`,
+//! `upmk`, `uang_pisah`, `unused_leave_payout`, `net_payable` and `legal_basis`, plus `pesangon`,
+//! `upm` (always 0) and `total` for readers of the earlier shape. The earlier one carries only
+//! `pesangon`, `upmk`, `upm`, `unused_leave_payout` and `total`. Either way the row's amount is
+//! `total`.
 //!
 //! ## Legacy tolerance
 //!
@@ -39,16 +46,63 @@ use uuid::Uuid;
 /// the outbox row id through the relay).
 const CONSUMER: &str = "offboarding.settlement";
 
-/// The carried 🇮🇩 pesangon breakdown, deserialized off the event payload. Payroll owns its own
+/// The carried settlement breakdown, deserialized off the event payload. Payroll owns its own
 /// mirror struct (it must NOT import `backbone-lifecycle`'s type — that would create a Cargo edge
-/// and break the acyclic graph); the field names match the producer's `PesangonBreakdown` exactly.
+/// and break the acyclic graph); the field names match the producer's payload. The itemised fields
+/// are optional so an event from an earlier producer still reads.
 #[derive(Debug, Clone, Deserialize)]
 struct CarriedBreakdown {
     pesangon: Decimal,
     upmk: Decimal,
+    #[serde(default)]
     upm: Decimal,
     unused_leave_payout: Decimal,
     total: Decimal,
+    #[serde(default)]
+    uang_pesangon: Option<Decimal>,
+    #[serde(default)]
+    uang_pisah: Option<Decimal>,
+    #[serde(default)]
+    legal_basis: Option<String>,
+}
+
+/// The settlement row's amount and note for a payload's breakdown (or its absence).
+///
+/// The amount is the carried `total`. A payload with no readable breakdown (an older producer)
+/// records zero with a note flagged for manual review rather than poison the queue.
+fn settlement_entry(breakdown: Option<&CarriedBreakdown>, reason: Option<&str>) -> (Decimal, String) {
+    let reason_note = reason.map(|x| format!(" (reason={x})")).unwrap_or_default();
+    match breakdown {
+        Some(b) => match (b.uang_pesangon, b.uang_pisah) {
+            // The itemised (PP 35/2021) payload.
+            (Some(uang_pesangon), uang_pisah) => (
+                b.total,
+                format!(
+                    "final settlement{reason_note}{}: uang_pesangon={} upmk={} uang_pisah={} unused_leave={} total={}",
+                    b.legal_basis.as_deref().map(|l| format!(" [{l}]")).unwrap_or_default(),
+                    uang_pesangon,
+                    b.upmk,
+                    uang_pisah.unwrap_or(Decimal::ZERO),
+                    b.unused_leave_payout,
+                    b.total,
+                ),
+            ),
+            // The earlier payload.
+            (None, _) => (
+                b.total,
+                format!(
+                    "pesangon settlement{reason_note}: pesangon={} upmk={} upm={} unused_leave={} total={}",
+                    b.pesangon, b.upmk, b.upm, b.unused_leave_payout, b.total,
+                ),
+            ),
+        },
+        None => (
+            Decimal::ZERO,
+            format!(
+                "offboarding settlement: payload carried no pesangon_breakdown — manual review required{reason_note}"
+            ),
+        ),
+    }
 }
 
 /// Integration-event handler that appends the real pesangon settlement row on `offboarding.closed`,
@@ -113,25 +167,7 @@ impl IntegrationEventHandler for OffboardingSettlementHandler {
             .map_err(|e| handler_err(format!("inbox claim: {e}")))?;
 
         if first_time {
-            let (amount, note) = match (&breakdown, reason.as_deref()) {
-                (Some(b), r) => {
-                    let note = format!(
-                        "pesangon settlement{}: pesangon={} upmk={} upm={} unused_leave={} total={}",
-                        r.map(|x| format!(" (reason={x})")).unwrap_or_default(),
-                        b.pesangon, b.upmk, b.upm, b.unused_leave_payout, b.total,
-                    );
-                    (b.total, note)
-                }
-                // Legacy payload (no breakdown): record a zero row flagged for manual review rather
-                // than silently writing a wrong number or failing the message.
-                (None, r) => {
-                    let note = format!(
-                        "offboarding settlement: payload carried no pesangon_breakdown — manual review required{}",
-                        r.map(|x| format!(" (reason={x})")).unwrap_or_default(),
-                    );
-                    (Decimal::ZERO, note)
-                }
-            };
+            let (amount, note) = settlement_entry(breakdown.as_ref(), reason.as_deref());
 
             // change_type='offboarding' is the dedicated enum variant for this; reference_id =
             // offboarding_id is the non-null idempotency link back to the source workflow.
@@ -180,4 +216,57 @@ fn map_db(e: sqlx::Error) -> EventError {
 
 fn handler_err(message: String) -> EventError {
     EventError::handler(CONSUMER, message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn d(s: &str) -> Decimal {
+        Decimal::from_str(s).unwrap()
+    }
+
+    fn parse(payload: serde_json::Value) -> Option<CarriedBreakdown> {
+        serde_json::from_value(payload["pesangon_breakdown"].clone()).ok()
+    }
+
+    #[test]
+    fn the_itemised_payload_records_its_total_and_names_the_items() {
+        // The shape the PP 35/2021 producer emits (numbers as JSON numbers or strings).
+        let p = serde_json::json!({ "pesangon_breakdown": {
+            "severance_case": "resignation", "legal_basis": "PP 35/2021 Pasal 50",
+            "uang_pesangon": "0", "upmk": "0", "uang_pisah": "8000000",
+            "severance_total": "8000000", "unused_leave_days": "12",
+            "unused_leave_payout": "4571428.56", "last_pay": "2666666.68",
+            "last_pay_via_payroll": true, "net_payable": "12571428.56",
+            "pesangon": "0", "upm": "0", "total": "12571428.56"
+        }});
+        let b = parse(p).expect("the itemised breakdown reads");
+        let (amount, note) = settlement_entry(Some(&b), Some("resignation"));
+        assert_eq!(amount, d("12571428.56"));
+        assert!(note.contains("uang_pisah=8000000"), "{note}");
+        assert!(note.contains("[PP 35/2021 Pasal 50]"), "{note}");
+        assert!(!note.contains("upm="), "no UPM item under PP 35/2021: {note}");
+    }
+
+    #[test]
+    fn the_earlier_payload_still_records_its_total() {
+        let p = serde_json::json!({ "pesangon_breakdown": {
+            "pesangon": 48000000.0, "upmk": 48000000.0, "upm": 14400000.0,
+            "unused_leave_payout": 46909090.91, "total": 157309090.91
+        }});
+        let b = parse(p).expect("the earlier breakdown reads");
+        let (amount, note) = settlement_entry(Some(&b), None);
+        assert_eq!(amount, d("157309090.91"));
+        assert!(note.starts_with("pesangon settlement: pesangon=48000000"), "{note}");
+    }
+
+    #[test]
+    fn a_payload_without_a_breakdown_records_zero_for_review() {
+        let b = parse(serde_json::json!({}));
+        let (amount, note) = settlement_entry(b.as_ref(), Some("death"));
+        assert_eq!(amount, Decimal::ZERO);
+        assert!(note.contains("manual review required (reason=death)"), "{note}");
+    }
 }
