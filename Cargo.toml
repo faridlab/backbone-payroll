@@ -1,6 +1,6 @@
 [package]
 name = "backbone-payroll"
-version = "0.3.50"
+version = "0.4.0"
 edition = "2021"
 description = "Payroll: salary structures, payroll runs and computed salary slips over effective-dated statutory tables, plus compensation changes"
 license = "MIT OR Apache-2.0"
@@ -20,19 +20,19 @@ path = "src/lib.rs"
 # or `rev = "<commit-sha>"`. Cargo dedupes the git fetch — the repo is only
 # cloned once even though four crates reference it.
 # -----------------------------------------------------------------------------
-backbone-core = { version = "2.7.35", features = ["postgres"] }
-backbone-orm = { version = "2.7.35" }
+backbone-core = { version = "3.0.0", features = ["postgres"] }
+backbone-orm = { version = "3.0.0" }
 # `axum` feature required for the CompanyContext extractor the guarded routes use; without it
 # the `company` module isn't exported and lib-only builds (clippy/check without dev-deps'
 # feature unification) fail to resolve the import.
-backbone-auth = { version = "2.7.35", features = ["axum"] }
-backbone-messaging = { version = "2.7.35" }
+backbone-auth = { version = "3.0.0", features = ["axum"] }
+backbone-messaging = { version = "3.0.0" }
 # Transactional-outbox consumer (ADR-005): the `promotion.salary` + `offboarding.settlement` handlers
 # dedup via `inbox::once` in the same tx as the compensation_changes insert. Pinned to the same tags
 # the rest of the HR constellation (employee/recruitment/lifecycle) uses so the
 # `IntegrationEventHandler` trait unifies across modules; the HR composer's [patch] block unifies
 # backbone-outbox onto local HEAD for dev.
-backbone-outbox = { version = "2.7.35" }
+backbone-outbox = { version = "3.0.0" }
 
 # Core async runtime and serialization
 tokio = { version = "1.0", features = ["full"] }
@@ -107,8 +107,8 @@ rand = "0.8"
 # read-ports — backbone-attendance (present_days), backbone-timeoff (paid_leave_days), backbone-calendar
 # (working_days) — writing setup through backbone-employee + backbone-timeoff. Dev-dependencies ONLY —
 # the shipped library has ZERO normal Cargo edge to any of them.
-backbone-accounting = { version = "0.9.27" }
-backbone-employee = { version = "0.2.45" }
-backbone-attendance = { version = "0.6.38" }
-backbone-timeoff = { version = "0.4.33" }
-backbone-calendar = { version = "0.2.27" }
+backbone-accounting = { version = "0.10.0" }
+backbone-employee = { version = "0.3.0" }
+backbone-attendance = { version = "0.7.0" }
+backbone-timeoff = { version = "0.5.0" }
+backbone-calendar = { version = "0.3.0" }

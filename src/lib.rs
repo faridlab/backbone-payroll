@@ -24,22 +24,7 @@ pub mod application;
 pub mod presentation;
 pub mod seeders;
 pub mod exports;
-
-// Re-exports for convenience - Domain entities
-pub use domain::entity::*;
-
-// Re-exports - Infrastructure
-pub use infrastructure::persistence::*;
-
-// Re-exports - Application services
-pub use application::service::CompensationChangeService;
-pub use application::service::PayrollEntryService;
-pub use application::service::SalarySlipService;
-pub use application::service::SalarySlipLineService;
-pub use application::service::SalaryStructureService;
-pub use application::service::SalaryComponentService;
-
-// <<< CUSTOM
+// <<< CUSTOM MODULES
 // The hand-owned request-pool shim (the composing service's tenant pool
 // resolution): a generated-tree declaration the regenerator drops, so it
 // lives in the preserved block (#447 cause-2 class).
@@ -60,6 +45,21 @@ pub use application::service::{
 };
 pub use presentation::http::create_guarded_payroll_routes;
 // END CUSTOM
+
+// Re-exports for convenience - Domain entities
+pub use domain::entity::*;
+
+// Re-exports - Infrastructure
+pub use infrastructure::persistence::*;
+
+// Re-exports - Application services
+pub use application::service::CompensationChangeService;
+pub use application::service::PayrollEntryService;
+pub use application::service::SalarySlipService;
+pub use application::service::SalarySlipLineService;
+pub use application::service::SalaryStructureService;
+pub use application::service::SalaryComponentService;
+
 use std::sync::Arc;
 use axum::Router;
 use sqlx::PgPool;
@@ -185,6 +185,8 @@ impl PayrollModule {
 /// Builder for PayrollModule
 pub struct PayrollModuleBuilder {
     db_pool: Option<PgPool>,
+    // <<< CUSTOM BUILDER FIELDS
+    // END CUSTOM
 }
 
 impl PayrollModuleBuilder {
@@ -192,6 +194,8 @@ impl PayrollModuleBuilder {
     pub fn new() -> Self {
         Self {
             db_pool: None,
+            // <<< CUSTOM BUILDER DEFAULTS
+            // END CUSTOM
         }
     }
 
