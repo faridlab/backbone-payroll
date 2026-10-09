@@ -112,6 +112,7 @@ async fn phrseam1_unpaid_leave_prorates_payroll_gross() {
         .create(CreateEmployeeDto {
             employee_number: format!("E-{}", &Uuid::new_v4().to_string()[..8]),
             user_id: None,
+            candidate_id: None,
             first_name: "Budi".into(),
             last_name: Some("Santoso".into()),
             email: None,
@@ -355,6 +356,7 @@ async fn phrseam2_statutory_drives_indonesian_net_pay() {
         .create(CreateEmployeeDto {
             employee_number: format!("E-{}", &Uuid::new_v4().to_string()[..8]),
             user_id: None,
+            candidate_id: None,
             first_name: "Siti".into(),
             last_name: Some("Wati".into()),
             email: None,
@@ -603,6 +605,7 @@ async fn joined_this_month(
         .create(CreateEmployeeDto {
             employee_number: format!("E-{}", &Uuid::new_v4().to_string()[..8]),
             user_id: None,
+            candidate_id: None,
             first_name: name.into(),
             last_name: None,
             email: None,

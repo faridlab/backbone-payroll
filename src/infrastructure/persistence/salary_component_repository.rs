@@ -102,10 +102,16 @@ impl SalaryComponentRepository {
         pool: &PgPool,
         structure_id: Uuid,
     ) -> Result<Vec<ComponentRow>, sqlx::Error> {
+        // Only what a slip is assembled from: a removed (soft-deleted) item is not paid, and a
+        // statutory item (BPJS, PPh 21) only marks that the rule applies — its amount is the
+        // statutory line the run computes from gross, so reading it here would charge it twice.
         let rows = fetch_all_rows_scoped(
             pool,
             sqlx::query(
-                "SELECT name, component_type::text AS ct, amount, gl_account_id FROM payroll.salary_components WHERE structure_id=$1")
+                "SELECT name, component_type::text AS ct, amount, gl_account_id FROM payroll.salary_components
+                  WHERE structure_id=$1
+                    AND NOT is_statutory
+                    AND (metadata->>'deleted_at') IS NULL")
                 .bind(structure_id),
         )
         .await?;
