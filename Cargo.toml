@@ -1,6 +1,6 @@
 [package]
 name = "backbone-payroll"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2021"
 description = "Payroll: salary structures, payroll runs and computed salary slips over effective-dated statutory tables, plus compensation changes"
 license = "MIT OR Apache-2.0"
