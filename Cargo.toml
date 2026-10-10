@@ -1,6 +1,6 @@
 [package]
 name = "backbone-payroll"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "Payroll: salary structures, payroll runs and computed salary slips over effective-dated statutory tables, plus compensation changes"
 license = "MIT OR Apache-2.0"
@@ -107,7 +107,7 @@ rand = "0.8"
 # read-ports — backbone-attendance (present_days), backbone-timeoff (paid_leave_days), backbone-calendar
 # (working_days) — writing setup through backbone-employee + backbone-timeoff. Dev-dependencies ONLY —
 # the shipped library has ZERO normal Cargo edge to any of them.
-backbone-accounting = { version = "0.10.0" }
+backbone-accounting = { version = "0.11.0" }
 backbone-employee = { version = "0.3.0" }
 backbone-attendance = { version = "0.8.0" }
 backbone-timeoff = { version = "0.5.0" }
