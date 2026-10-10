@@ -23,10 +23,10 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use backbone_auth::org::OrgContext;
@@ -318,6 +318,37 @@ async fn remit_run(
     }
 }
 
+// ── comparison ─────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct ComparisonQuery {
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
+/// `GET /payroll-entries/:id/comparison` — the run beside the run before it: totals, who joined
+/// and left, each pay component's movement, and each person's pay against last run, largest change
+/// first (`limit`, default 50, at most 200; `offset`). Read-only.
+async fn compare_run(
+    _org: OrgContext,
+    State(svc): State<Arc<PayrollWriteService>>,
+    Path(id): Path<Uuid>,
+    Query(q): Query<ComparisonQuery>,
+) -> axum::response::Response {
+    let pool = svc.read_pool();
+    match crate::application::service::compare_runs(
+        &pool,
+        id,
+        q.limit.unwrap_or(50),
+        q.offset.unwrap_or(0),
+    )
+    .await
+    {
+        Ok(c) => (StatusCode::OK, Json(serde_json::json!({ "success": true, "data": c }))).into_response(),
+        Err(e) => err_response(e),
+    }
+}
+
 // ── composition ────────────────────────────────────────────────────────────────
 
 /// Build the guarded payroll router: entity reads + structure/component CRUD + the run verbs,
@@ -333,6 +364,7 @@ pub fn create_guarded_payroll_routes(m: &PayrollModule) -> Router {
         .route("/payroll-entries/:id/post", post(post_run))
         .route("/payroll-entries/:id/cancel", post(cancel_run))
         .route("/payroll-entries/:id/remit", post(remit_run))
+        .route("/payroll-entries/:id/comparison", get(compare_run))
         .with_state(m.payroll_write_service());
 
     // Reads: run/slip/slip-line/compensation GETs (proof surfaces). Structures + components mount

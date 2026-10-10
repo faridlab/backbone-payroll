@@ -253,6 +253,12 @@ impl PayrollWriteService {
         crate::request_pool::current().unwrap_or_else(|| self.pool.clone())
     }
 
+    /// The database this request reads: the tenant pool the composer installed, else the
+    /// composed pool — for the module's read handlers that sit beside the verbs.
+    pub fn read_pool(&self) -> sqlx::PgPool {
+        self.rpool()
+    }
+
     pub fn new(pool: PgPool) -> Self {
         let structures = SalaryStructureRepository::new(pool.clone());
         let components = SalaryComponentRepository::new(pool.clone());

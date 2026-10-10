@@ -20,6 +20,7 @@ user_owned:
   - "src/application/service/payroll_gl.rs"
   - "src/application/service/payroll_remittance.rs"
   - "src/application/service/payroll_write_service.rs"
+  - "src/application/service/payroll_comparison.rs"
   # The approved-timesheet input port (provenance for slip overtime lines).
   - "src/application/service/timesheet_port.rs"
   - "migrations/20260920093000_slip_source_refs.up.sql"
@@ -55,6 +56,7 @@ user_owned:
   - "tests/payroll_gl_seam.rs"
   - "tests/payroll_golden_cases.rs"
   - "tests/payroll_hr_seam.rs"
+  - "tests/run_comparison.rs"
   - "scripts/**"
   # Hand-authored behavior (services + their HTTP surface). Examples:
   # - "src/application/service/onboarding_service.rs"

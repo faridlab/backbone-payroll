@@ -40,6 +40,8 @@ pub mod onboarding_enrolled_handler;
 // Consumer: recruitment.hired → the new employee's first compensation change (the offered salary,
 // effective on the first day), idempotently.
 pub mod hire_compensation_handler;
+// A run beside the run before it: the read behind checking a run before it is approved.
+pub mod payroll_comparison;
 // END CUSTOM
 
 pub use compensation_change_service::CompensationChangeService;
@@ -72,6 +74,7 @@ pub use statutory_calcs::{
     Pph21Bracket, Pph21Config, Pph21Method, PtkpTier, StatutoryComponent, StatutoryConfig,
     StatutoryError, TerCategory, TerRateBand,
 };
+pub use payroll_comparison::{compare_runs, ComponentChange, PersonChange, RunComparison, RunTotals};
 pub use promotion_salary_handler::PromotionSalaryHandler;
 pub use offboarding_settlement_handler::OffboardingSettlementHandler;
 pub use onboarding_enrolled_handler::{OnboardingEnrolledHandler, OnboardingEnrollInputs, PoolOnboardingEnrollInputs};
