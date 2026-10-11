@@ -103,10 +103,16 @@ async fn a_run_is_compared_with_the_last_run_paid_before_it() {
     assert_eq!(c.people[0].gross, None, "who left has no pay this run");
     assert_eq!(c.people[1].previous_gross, None, "who joined had none last run");
 
-    // The first run has nothing to compare with, and says so rather than showing zeros.
-    let first = compare_runs(&pool, july, 50, 0).await.expect("compare first");
-    assert!(first.previous.is_none());
-    assert!(first.components.is_empty() && first.people.is_empty());
+}
+
+#[tokio::test]
+async fn the_first_run_has_nothing_to_compare_with_and_says_so() {
+    let pool = pool().await;
+    // January of year 1: no run can come before it, whatever else the database holds.
+    let first = run(&pool, 1, 1, "posted").await;
+    let c = compare_runs(&pool, first, 50, 0).await.expect("compare first");
+    assert!(c.previous.is_none(), "nothing earlier, rather than zeros against nothing");
+    assert!(c.components.is_empty() && c.people.is_empty());
 }
 
 #[tokio::test]
