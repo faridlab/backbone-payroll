@@ -118,17 +118,25 @@ impl PayScheduleRepository {
     }
 
     /// Write a version; a second change planned for the same component and date replaces the first.
+    /// Who planned it is the request's audit actor (`app.actor`, which the caller's scope relay
+    /// sets), kept in the row's own metadata so the history can name them.
     pub async fn upsert_version(conn: &mut PgConnection, v: &VersionRow<'_>) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"INSERT INTO payroll.salary_component_versions
                  (id, component_id, effective_from, name, component_type, amount, gl_account_id,
-                  is_statutory, removed, reason)
-               VALUES ($1,$2,$3,$4,$5::component_type,$6,$7,$8,$9,$10)
+                  is_statutory, removed, reason, metadata)
+               VALUES ($1,$2,$3,$4,$5::component_type,$6,$7,$8,$9,$10,
+                       jsonb_build_object('created_at', NULL, 'updated_at', NULL, 'deleted_at', NULL,
+                           'created_by', NULLIF(current_setting('app.actor', true), ''),
+                           'updated_by', NULLIF(current_setting('app.actor', true), ''),
+                           'deleted_by', NULL))
                ON CONFLICT (component_id, effective_from) DO UPDATE
                   SET name = EXCLUDED.name, component_type = EXCLUDED.component_type,
                       amount = EXCLUDED.amount, gl_account_id = EXCLUDED.gl_account_id,
                       is_statutory = EXCLUDED.is_statutory, removed = EXCLUDED.removed,
-                      reason = EXCLUDED.reason"#,
+                      reason = EXCLUDED.reason,
+                      metadata = jsonb_set(salary_component_versions.metadata, '{updated_by}',
+                          COALESCE(to_jsonb(NULLIF(current_setting('app.actor', true), '')), 'null'::jsonb))"#,
         )
         .bind(Uuid::new_v4())
         .bind(v.component_id)

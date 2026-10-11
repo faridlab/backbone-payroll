@@ -220,3 +220,40 @@ async fn only_a_change_still_to_come_can_be_withdrawn() {
     // The structure reads as before, for every month.
     assert_eq!(gross_in(&svc, &a, structure, y, 10).await.1, dec("8000000"));
 }
+
+#[tokio::test]
+async fn a_planned_change_records_who_planned_it() {
+    // One connection, so the audit actor set for its session is the one the plan's own
+    // transaction sees, as the request's scope relay sets it under HTTP.
+    let pool = sqlx::postgres::PgPoolOptions::new().max_connections(1).connect(&dburl()).await.unwrap();
+    let a = payroll_accounts(&pool).await;
+    let svc = PayrollWriteService::new(pool.clone());
+    let y = spare_year();
+    let structure = svc
+        .create_structure(NewStructure {
+            name: "Harian".into(),
+            components: vec![NewComponent { name: "Upah".into(), component_type: "earning".into(), amount: dec("150000"), gl_account_id: a.salary_expense }],
+        })
+        .await
+        .unwrap();
+    let (upah, _, _) = component(&pool, structure, "Upah").await.unwrap();
+    let actor = Uuid::new_v4().to_string();
+    sqlx::query("SELECT set_config('app.actor', $1, false)").bind(&actor).execute(&pool).await.unwrap();
+    plan_change(&pool, PlannedChange {
+        structure_id: structure,
+        effective_from: day(y, 4, 1),
+        reason: None,
+        items: vec![item(Some(upah), "Upah", "160000", a.salary_expense)],
+    }, day(y, 1, 1))
+    .await
+    .unwrap();
+    let by: Vec<Option<String>> = sqlx::query_scalar(
+        "SELECT metadata->>'created_by' FROM payroll.salary_component_versions WHERE component_id = $1 ORDER BY effective_from",
+    )
+    .bind(upah)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(by, vec![Some(actor.clone()), Some(actor)], "the baseline and the change name who planned them");
+    sqlx::query("SELECT set_config('app.actor', '', false)").execute(&pool).await.unwrap();
+}
