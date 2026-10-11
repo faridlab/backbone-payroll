@@ -16,9 +16,5 @@ pub type SalarySlipValidator = EntityValidator<SalarySlip>;
 pub fn salary_slip_validator() -> SalarySlipValidator {
     EntityValidator::new()
         .rule(OptionalNotBlank::new("tax_method", |e: &SalarySlip| e.tax_method.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

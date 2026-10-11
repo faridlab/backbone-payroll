@@ -16,5 +16,3 @@ pub use salary_slip_line_domain_policy::SalarySlipLineDomainPolicy;
 pub use salary_structure_domain_policy::SalaryStructureDomainPolicy;
 pub use salary_component_domain_policy::SalaryComponentDomainPolicy;
 
-// <<< CUSTOM
-// END CUSTOM

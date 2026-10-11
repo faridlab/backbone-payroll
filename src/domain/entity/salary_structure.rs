@@ -148,8 +148,6 @@ impl SalaryStructure {
         }
     }
 
-    // <<< CUSTOM METHODS START >>>
-    // <<< CUSTOM METHODS END >>>
 }
 
 impl super::Entity for SalaryStructure {

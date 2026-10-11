@@ -18,5 +18,3 @@ use crate::domain::entity::PayrollEntry;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type PayrollEntryDomainPolicy = PermitAllPolicy<PayrollEntry>;
 
-// <<< CUSTOM
-// END CUSTOM

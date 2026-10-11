@@ -124,6 +124,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add SalarySlip specific tests here
-// <<< CUSTOM TESTS END >>>

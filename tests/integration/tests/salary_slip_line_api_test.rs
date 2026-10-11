@@ -120,6 +120,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add SalarySlipLine specific tests here
-// <<< CUSTOM TESTS END >>>

@@ -18,5 +18,3 @@ use crate::domain::entity::CompensationChange;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type CompensationChangeDomainPolicy = PermitAllPolicy<CompensationChange>;
 
-// <<< CUSTOM
-// END CUSTOM

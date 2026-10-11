@@ -16,9 +16,5 @@ pub type CompensationChangeValidator = EntityValidator<CompensationChange>;
 pub fn compensation_change_validator() -> CompensationChangeValidator {
     EntityValidator::new()
         .rule(OptionalNotBlank::new("note", |e: &CompensationChange| e.note.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

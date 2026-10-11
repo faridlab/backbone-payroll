@@ -17,9 +17,5 @@ pub fn salary_slip_line_validator() -> SalarySlipLineValidator {
     EntityValidator::new()
         .rule(RequiredString::new("name", |e: &SalarySlipLine| &e.name))
         .rule(OptionalNotBlank::new("source_kind", |e: &SalarySlipLine| e.source_kind.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

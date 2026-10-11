@@ -16,9 +16,5 @@ pub type SalaryStructureValidator = EntityValidator<SalaryStructure>;
 pub fn salary_structure_validator() -> SalaryStructureValidator {
     EntityValidator::new()
         .rule(RequiredString::new("name", |e: &SalaryStructure| &e.name))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

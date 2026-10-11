@@ -164,8 +164,6 @@ impl SalaryComponent {
         }
     }
 
-    // <<< CUSTOM METHODS START >>>
-    // <<< CUSTOM METHODS END >>>
 }
 
 impl super::Entity for SalaryComponent {

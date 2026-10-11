@@ -28,5 +28,3 @@ pub use salary_structure_event_handlers::SalaryStructureEventHandler;
 pub use salary_component_events::{SalaryComponentEvent, SalaryComponentEventPublisher, NoopSalaryComponentEventPublisher};
 pub use salary_component_event_handlers::SalaryComponentEventHandler;
 
-// <<< CUSTOM
-// END CUSTOM

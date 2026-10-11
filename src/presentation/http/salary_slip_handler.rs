@@ -363,3 +363,4 @@ pub fn create_salary_slip_history_route(pool: sqlx::PgPool) -> axum::Router {
         .route("/salary_slips/:id/history", axum::routing::get(salary_slip_history))
         .with_state(pool)
 }
+

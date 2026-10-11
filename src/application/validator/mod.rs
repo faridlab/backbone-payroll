@@ -19,5 +19,3 @@ pub use salary_slip_line_validator::{SalarySlipLineValidator, salary_slip_line_v
 pub use salary_structure_validator::{SalaryStructureValidator, salary_structure_validator};
 pub use salary_component_validator::{SalaryComponentValidator, salary_component_validator};
 
-// <<< CUSTOM
-// END CUSTOM

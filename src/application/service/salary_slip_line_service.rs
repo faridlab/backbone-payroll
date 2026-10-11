@@ -32,5 +32,3 @@ pub type SalarySlipLineService = GenericCrudService<
     SalarySlipLineRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

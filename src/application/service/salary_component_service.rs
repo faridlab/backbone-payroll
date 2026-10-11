@@ -32,5 +32,3 @@ pub type SalaryComponentService = GenericCrudService<
     SalaryComponentRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

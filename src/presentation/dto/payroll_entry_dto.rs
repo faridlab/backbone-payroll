@@ -370,7 +370,7 @@ impl backbone_core::ApplyUpdateDto<UpdatePayrollEntryDto> for PayrollEntry {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to PayrollEntry here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

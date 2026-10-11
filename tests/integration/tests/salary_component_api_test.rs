@@ -116,6 +116,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add SalaryComponent specific tests here
-// <<< CUSTOM TESTS END >>>

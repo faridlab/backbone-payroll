@@ -13,5 +13,3 @@ pub mod salary_slip_line_specification;
 pub mod salary_structure_specification;
 pub mod salary_component_specification;
 
-// <<< CUSTOM
-// END CUSTOM

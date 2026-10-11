@@ -32,5 +32,3 @@ pub type CompensationChangeService = GenericCrudService<
     CompensationChangeRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

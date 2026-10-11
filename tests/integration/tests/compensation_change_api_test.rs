@@ -107,6 +107,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add CompensationChange specific tests here
-// <<< CUSTOM TESTS END >>>

@@ -32,5 +32,3 @@ pub type PayrollEntryService = GenericCrudService<
     PayrollEntryRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

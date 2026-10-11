@@ -18,5 +18,3 @@ use crate::domain::entity::SalarySlipLine;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type SalarySlipLineDomainPolicy = PermitAllPolicy<SalarySlipLine>;
 
-// <<< CUSTOM
-// END CUSTOM

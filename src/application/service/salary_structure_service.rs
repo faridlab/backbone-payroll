@@ -32,5 +32,3 @@ pub type SalaryStructureService = GenericCrudService<
     SalaryStructureRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

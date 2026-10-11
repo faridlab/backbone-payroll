@@ -364,3 +364,4 @@ pub fn create_compensation_change_history_route(pool: sqlx::PgPool) -> axum::Rou
         .route("/compensation_changes/:id/history", axum::routing::get(compensation_change_history))
         .with_state(pool)
 }
+

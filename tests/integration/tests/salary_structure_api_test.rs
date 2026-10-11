@@ -99,6 +99,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add SalaryStructure specific tests here
-// <<< CUSTOM TESTS END >>>

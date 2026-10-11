@@ -187,3 +187,4 @@ pub fn create_protected_salary_component_routes<A: AuthMiddleware + Send + Sync 
             }
         }))
 }
+

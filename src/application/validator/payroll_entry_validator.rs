@@ -15,10 +15,6 @@ pub type PayrollEntryValidator = EntityValidator<PayrollEntry>;
 /// Build a validator for PayrollEntry with all schema-defined field rules.
 pub fn payroll_entry_validator() -> PayrollEntryValidator {
     EntityValidator::new()
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
         // No schema-derived rules — add custom rules above.
 }
 
-// <<< CUSTOM
-// END CUSTOM
