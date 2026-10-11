@@ -61,7 +61,7 @@ pub use payroll_remittance::{
     RemitAck, RemittanceInstruction, RemittanceSeamError, RemittanceSink, UnwiredRemittance,
 };
 pub use payroll_write_service::{
-    ComputedSlipRequest, NewComponent, NewPayrollEntry, NewSalarySlip, NewStructure, PayrollError,
+    ComputedSlipRequest, NewComponent, NewPayrollEntry, NewSalarySlip, NewStructure, PayrollError, SlipPreview,
     PayrollWriteService, PostOutcome, RemitOutcome, StatutoryAccounts, StatutoryLine,
 };
 pub use overtime_port::{OvertimeInputs, PoolOvertimeInputs};

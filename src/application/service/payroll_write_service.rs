@@ -168,6 +168,35 @@ pub struct StatutoryLine {
     /// The producing record's id (e.g. the timesheet approval row).
     pub source_ref: Option<Uuid>,
 }
+/// One slip line as priced, before it is written.
+struct PricedLine {
+    name: String,
+    ct: String,
+    is_statutory: bool,
+    amount: Decimal,
+    account: Uuid,
+    source_kind: Option<&'static str>,
+    source_ref: Option<Uuid>,
+}
+
+/// A slip's lines and totals as the save path computes them.
+struct PricedSlip {
+    lines: Vec<PricedLine>,
+    gross: Decimal,
+    deductions: Decimal,
+    net: Decimal,
+    unpaid: Decimal,
+}
+
+/// What a computed slip would come to, with nothing written.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct SlipPreview {
+    pub gross: Decimal,
+    pub deductions: Decimal,
+    pub net: Decimal,
+    pub overtime_hours: Decimal,
+}
+
 pub struct NewSalarySlip {
     pub employee_id: Uuid,
     pub structure_id: Uuid,
@@ -442,69 +471,7 @@ impl PayrollWriteService {
         if run.status != "draft" {
             return Err(PayrollError::InvalidState("run is not draft"));
         }
-        if s.working_days <= Decimal::ZERO {
-            return Err(PayrollError::Invalid("working_days must be positive".into()));
-        }
-        // Clamp unpaid days to [0, working_days] so the proration factor stays in [0, 1]. Without the
-        // LOWER clamp a negative unpaid_days (a bad upstream hr.period_summary value) drives factor > 1
-        // and inflates gross ABOVE the structure — a balanced-but-over-booked salary journal (maturity
-        // council 2026-07-08). The DB CHECKs in 20260708000100_payroll_balance_guards backstop any writer.
-        let unpaid = s.unpaid_days.clamp(Decimal::ZERO, s.working_days);
-        let factor = (s.working_days - unpaid) / s.working_days; // proration for unpaid days
-
-        // Load the structure components.
-        let comps = self.components.list_by_structure(&self.rpool(), s.structure_id).await?;
-        if comps.is_empty() {
-            return Err(PayrollError::Invalid("salary structure has no components".into()));
-        }
-
-        struct Line { name: String, ct: String, is_statutory: bool, amount: Decimal, account: Uuid,
-                      source_kind: Option<&'static str>, source_ref: Option<Uuid> }
-        let mut lines: Vec<Line> = Vec::new();
-        let (mut gross, mut deductions) = (Decimal::ZERO, Decimal::ZERO);
-        for c in &comps {
-            let ct = c.component_type.clone();
-            let base = c.amount;
-            let account = c.gl_account_id;
-            if ct == "earning" {
-                let amt = money(base * factor);
-                gross += amt;
-                lines.push(Line { name: c.name.clone(), ct, is_statutory: false, amount: amt, account,
-                                  source_kind: None, source_ref: None });
-            } else {
-                deductions += base;
-                lines.push(Line { name: c.name.clone(), ct, is_statutory: false, amount: base, account,
-                                  source_kind: None, source_ref: None });
-            }
-        }
-        for st in &s.statutory {
-            if st.amount < Decimal::ZERO {
-                return Err(PayrollError::Invalid("statutory amount must be non-negative".into()));
-            }
-            let amt = money(st.amount);
-            // Route by component_type: a THR earning raises gross (un-prorated — THR already carries
-            // its own tenure pro-rating); a deduction subtracts. The slip-line keeps the caller's
-            // component_type so the GL deduction grouping (`component_type='deduction'`) excludes THR.
-            let is_earning = st.component_type == "earning";
-            if is_earning {
-                gross += amt;
-            } else {
-                deductions += amt;
-            }
-            lines.push(Line {
-                name: st.name.clone(),
-                ct: st.component_type.clone(),
-                is_statutory: true,
-                amount: amt,
-                account: st.gl_account_id,
-                source_kind: st.source_kind,
-                source_ref: st.source_ref,
-            });
-        }
-        let net = gross - deductions;
-        if net < Decimal::ZERO {
-            return Err(PayrollError::Invalid("deductions exceed gross — net pay would be negative".into()));
-        }
+        let PricedSlip { lines, gross, deductions, net, unpaid } = self.price_slip(&s).await?;
 
         let slip_id = Uuid::new_v4();
         let mut tx = self.rpool().begin().await?;
@@ -558,12 +525,103 @@ impl PayrollWriteService {
         Ok(slip_id)
     }
 
+    /// Price a slip as [`Self::add_salary_slip`] writes it: the structure's earnings prorated by
+    /// unpaid days, its fixed deductions, and the statutory lines — with nothing written. The save
+    /// and the preview read the same numbers from here, so a preview never states a different slip.
+    async fn price_slip(&self, s: &NewSalarySlip) -> Result<PricedSlip, PayrollError> {
+        if s.working_days <= Decimal::ZERO {
+            return Err(PayrollError::Invalid("working_days must be positive".into()));
+        }
+        // Clamp unpaid days to [0, working_days] so the proration factor stays in [0, 1]. Without the
+        // LOWER clamp a negative unpaid_days (a bad upstream hr.period_summary value) drives factor > 1
+        // and inflates gross ABOVE the structure — a balanced-but-over-booked salary journal (maturity
+        // council 2026-07-08). The DB CHECKs in 20260708000100_payroll_balance_guards backstop any writer.
+        let unpaid = s.unpaid_days.clamp(Decimal::ZERO, s.working_days);
+        let factor = (s.working_days - unpaid) / s.working_days; // proration for unpaid days
+
+        // Load the structure components.
+        let comps = self.components.list_by_structure(&self.rpool(), s.structure_id).await?;
+        if comps.is_empty() {
+            return Err(PayrollError::Invalid("salary structure has no components".into()));
+        }
+
+        let mut lines: Vec<PricedLine> = Vec::new();
+        let (mut gross, mut deductions) = (Decimal::ZERO, Decimal::ZERO);
+        for c in &comps {
+            let ct = c.component_type.clone();
+            let base = c.amount;
+            let account = c.gl_account_id;
+            if ct == "earning" {
+                let amt = money(base * factor);
+                gross += amt;
+                lines.push(PricedLine { name: c.name.clone(), ct, is_statutory: false, amount: amt, account,
+                                  source_kind: None, source_ref: None });
+            } else {
+                deductions += base;
+                lines.push(PricedLine { name: c.name.clone(), ct, is_statutory: false, amount: base, account,
+                                  source_kind: None, source_ref: None });
+            }
+        }
+        for st in &s.statutory {
+            if st.amount < Decimal::ZERO {
+                return Err(PayrollError::Invalid("statutory amount must be non-negative".into()));
+            }
+            let amt = money(st.amount);
+            // Route by component_type: a THR earning raises gross (un-prorated — THR already carries
+            // its own tenure pro-rating); a deduction subtracts. The slip-line keeps the caller's
+            // component_type so the GL deduction grouping (`component_type='deduction'`) excludes THR.
+            let is_earning = st.component_type == "earning";
+            if is_earning {
+                gross += amt;
+            } else {
+                deductions += amt;
+            }
+            lines.push(PricedLine {
+                name: st.name.clone(),
+                ct: st.component_type.clone(),
+                is_statutory: true,
+                amount: amt,
+                account: st.gl_account_id,
+                source_kind: st.source_kind,
+                source_ref: st.source_ref,
+            });
+        }
+        let net = gross - deductions;
+        if net < Decimal::ZERO {
+            return Err(PayrollError::Invalid("deductions exceed gross — net pay would be negative".into()));
+        }
+        Ok(PricedSlip { lines, gross, deductions, net, unpaid })
+    }
+
     /// Build one employee's slip end-to-end: period → effective statutory params → employee facts →
     /// TER/bracket dispatch → overtime pay → the same [`Self::add_salary_slip`] write path a manual
     /// caller uses. The statutory base is the structure's un-prorated monthly earning total (the
     /// salary being paid); overtime pay rides in as an ordinary earning line so gross stays balanced
     /// through the existing journal.
     pub async fn add_computed_salary_slip(&self, r: ComputedSlipRequest) -> Result<Uuid, PayrollError> {
+        let slip = self.build_computed_slip(&r).await?;
+        self.add_salary_slip(r.run_id, slip).await
+    }
+
+    /// What [`Self::add_computed_salary_slip`] would write for one employee — gross, deductions,
+    /// net and the overtime hours it used — worked out by the same rules with nothing saved. The
+    /// preview behind a bulk generate: it refuses for the same reasons the write would.
+    pub async fn preview_computed_salary_slip(
+        &self,
+        r: ComputedSlipRequest,
+    ) -> Result<SlipPreview, PayrollError> {
+        let slip = self.build_computed_slip(&r).await?;
+        let priced = self.price_slip(&slip).await?;
+        Ok(SlipPreview {
+            gross: priced.gross,
+            deductions: priced.deductions,
+            net: priced.net,
+            overtime_hours: slip.overtime_hours,
+        })
+    }
+
+    /// One employee's slip as the computed path assembles it, before it is priced and written.
+    async fn build_computed_slip(&self, r: &ComputedSlipRequest) -> Result<NewSalarySlip, PayrollError> {
         let risk_class = u8::try_from(r.risk_class)
             .ok()
             .filter(|rc| (1..=5).contains(rc))
@@ -727,20 +785,16 @@ impl PayrollWriteService {
             });
         }
 
-        self.add_salary_slip(
-            r.run_id,
-            NewSalarySlip {
-                employee_id: r.employee_id,
-                structure_id: r.structure_id,
-                working_days: r.working_days,
-                unpaid_days: r.unpaid_days,
-                statutory,
-                overtime_hours,
-                tax_method: Some(method.label().to_string()),
-                timesheet_approval_id,
-            },
-        )
-        .await
+        Ok(NewSalarySlip {
+            employee_id: r.employee_id,
+            structure_id: r.structure_id,
+            working_days: r.working_days,
+            unpaid_days: r.unpaid_days,
+            statutory,
+            overtime_hours,
+            tax_method: Some(method.label().to_string()),
+            timesheet_approval_id,
+        })
     }
 
     /// Roll the run's slips up into its totals and move `draft → processed` (ready to post).

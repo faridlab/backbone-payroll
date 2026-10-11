@@ -763,18 +763,26 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
         .await
         .unwrap();
 
-    let slip = svc
-        .add_computed_salary_slip(pay::ComputedSlipRequest {
-            run_id: run,
-            employee_id: emp,
-            structure_id: structure,
-            working_days: dec("23"),
-            unpaid_days: dec("0"),
-            risk_class: 3,
-            accounts: computed_accounts(&a),
-        })
+    let request = || pay::ComputedSlipRequest {
+        run_id: run,
+        employee_id: emp,
+        structure_id: structure,
+        working_days: dec("23"),
+        unpaid_days: dec("0"),
+        risk_class: 3,
+        accounts: computed_accounts(&a),
+    };
+    // The preview behind a bulk generate: the same numbers the write is about to store, and
+    // nothing stored by asking.
+    let preview = svc.preview_computed_salary_slip(request()).await.expect("preview");
+    let before: (i64,) = sqlx::query_as("SELECT count(*) FROM payroll.salary_slips WHERE payroll_entry_id=$1")
+        .bind(run)
+        .fetch_one(&pool)
         .await
-        .expect("computed slip");
+        .unwrap();
+    assert_eq!(before.0, 0, "a preview writes no slip");
+
+    let slip = svc.add_computed_salary_slip(request()).await.expect("computed slip");
 
     #[derive(sqlx::FromRow)]
     struct SlipStamp {
@@ -790,6 +798,11 @@ async fn phrseam3_overtime_comes_from_attendance_time_debt() {
     .await
     .unwrap();
     assert_eq!(s.overtime_hours, dec("10"), "five days × 120 min = 10h in July only");
+    assert_eq!(
+        (preview.gross, preview.overtime_hours),
+        (s.gross_pay, s.overtime_hours),
+        "the preview states the slip the write stored"
+    );
     assert_eq!(s.tax_method.as_deref(), Some("npwp_brackets"), "no TER category → brackets stamp");
 
     let ot: (Decimal,) = sqlx::query_as(
