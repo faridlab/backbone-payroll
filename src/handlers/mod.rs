@@ -15,6 +15,7 @@ use crate::application::service::SalarySlipService;
 use crate::application::service::SalarySlipLineService;
 use crate::application::service::SalaryStructureService;
 use crate::application::service::SalaryComponentService;
+use crate::application::service::SalaryComponentVersionService;
 
 /// Application state for dependency injection.
 ///
@@ -46,6 +47,8 @@ pub struct AppState {
     pub salary_structure_service: Arc<SalaryStructureService>,
     /// SalaryComponent service
     pub salary_component_service: Arc<SalaryComponentService>,
+    /// SalaryComponentVersion service
+    pub salary_component_version_service: Arc<SalaryComponentVersionService>,
 }
 
 impl AppState {
@@ -56,7 +59,8 @@ impl AppState {
         salary_slip_service: Arc<SalarySlipService>,
         salary_slip_line_service: Arc<SalarySlipLineService>,
         salary_structure_service: Arc<SalaryStructureService>,
-        salary_component_service: Arc<SalaryComponentService>
+        salary_component_service: Arc<SalaryComponentService>,
+        salary_component_version_service: Arc<SalaryComponentVersionService>
     ) -> Self {
         Self {
             compensation_change_service,
@@ -65,6 +69,7 @@ impl AppState {
             salary_slip_line_service,
             salary_structure_service,
             salary_component_service,
+            salary_component_version_service,
         }
     }
 
@@ -77,6 +82,7 @@ impl AppState {
             salary_slip_line_service: module.salary_slip_line_service.clone(),
             salary_structure_service: module.salary_structure_service.clone(),
             salary_component_service: module.salary_component_service.clone(),
+            salary_component_version_service: module.salary_component_version_service.clone(),
         }
     }
 }
@@ -92,6 +98,7 @@ pub struct AppStateBuilder {
     salary_slip_line_service: Option<Arc<SalarySlipLineService>>,
     salary_structure_service: Option<Arc<SalaryStructureService>>,
     salary_component_service: Option<Arc<SalaryComponentService>>,
+    salary_component_version_service: Option<Arc<SalaryComponentVersionService>>,
 }
 
 impl AppStateBuilder {
@@ -136,6 +143,12 @@ impl AppStateBuilder {
         self
     }
 
+    /// Set the SalaryComponentVersion service.
+    pub fn with_salary_component_version_service(mut self, service: Arc<SalaryComponentVersionService>) -> Self {
+        self.salary_component_version_service = Some(service);
+        self
+    }
+
     /// Build the AppState.
     ///
     /// # Panics
@@ -149,6 +162,7 @@ impl AppStateBuilder {
             salary_slip_line_service: self.salary_slip_line_service.expect("salary_slip_line_service is required"),
             salary_structure_service: self.salary_structure_service.expect("salary_structure_service is required"),
             salary_component_service: self.salary_component_service.expect("salary_component_service is required"),
+            salary_component_version_service: self.salary_component_version_service.expect("salary_component_version_service is required"),
         }
     }
 }

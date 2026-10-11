@@ -4,9 +4,8 @@
 # NOT schema-derived. `metaphor schema generate [--force]` skips them wholesale (never reads,
 # merges, or deletes them). Everything else in src/ is regenerated from schema/models.
 #
-# Re-exports/declarations that must sit alongside generated code live inside
-# `// <<< CUSTOM ... // END CUSTOM` markers (service/mod.rs, presentation/http/mod.rs, lib.rs)
-# and are preserved by the marker mechanism, not listed here.
+# Declarations and re-exports that sit alongside generated code live in the extension files
+# (mod.ext.rs, lib.ext.rs; ADR-0031), which the generator never writes.
 #
 # Add your hand-authored services, handlers, tests, and docs below as you write them.
 
@@ -21,6 +20,10 @@ user_owned:
   - "src/application/service/payroll_remittance.rs"
   - "src/application/service/payroll_write_service.rs"
   - "src/application/service/payroll_comparison.rs"
+  # Changing a structure from a date: plan, withdraw, and the pass that applies due changes, with
+  # the SQL that keeps each component row on its version in force today.
+  - "src/application/service/pay_schedule.rs"
+  - "src/infrastructure/persistence/pay_schedule_repository.rs"
   # The approved-timesheet input port (provenance for slip overtime lines).
   - "src/application/service/timesheet_port.rs"
   - "migrations/20260920093000_slip_source_refs.up.sql"
@@ -57,6 +60,7 @@ user_owned:
   - "tests/payroll_golden_cases.rs"
   - "tests/payroll_hr_seam.rs"
   - "tests/run_comparison.rs"
+  - "tests/pay_schedule.rs"
   - "scripts/**"
   # Hand-authored behavior (services + their HTTP surface). Examples:
   # - "src/application/service/onboarding_service.rs"

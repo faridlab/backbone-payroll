@@ -45,6 +45,9 @@ pub use events::*;
 /// - `SalaryComponentDto` - Data transfer object for SalaryComponent
 /// - `SalaryComponentSummary` - Summary view of SalaryComponent
 /// - `SalaryComponentId` - Type-safe ID wrapper
+/// - `SalaryComponentVersionDto` - Data transfer object for SalaryComponentVersion
+/// - `SalaryComponentVersionSummary` - Summary view of SalaryComponentVersion
+/// - `SalaryComponentVersionId` - Type-safe ID wrapper
 ///
 /// ## Public Events
 /// - `CompensationChangeCreatedEvent` - Published when CompensationChange is created
@@ -65,4 +68,7 @@ pub use events::*;
 /// - `SalaryComponentCreatedEvent` - Published when SalaryComponent is created
 /// - `SalaryComponentUpdatedEvent` - Published when SalaryComponent is updated
 /// - `SalaryComponentDeletedEvent` - Published when SalaryComponent is deleted
+/// - `SalaryComponentVersionCreatedEvent` - Published when SalaryComponentVersion is created
+/// - `SalaryComponentVersionUpdatedEvent` - Published when SalaryComponentVersion is updated
+/// - `SalaryComponentVersionDeletedEvent` - Published when SalaryComponentVersion is deleted
 pub struct ExportSummary;

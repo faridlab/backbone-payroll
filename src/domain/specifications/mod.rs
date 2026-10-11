@@ -12,4 +12,5 @@ pub mod salary_slip_specification;
 pub mod salary_slip_line_specification;
 pub mod salary_structure_specification;
 pub mod salary_component_specification;
+pub mod salary_component_version_specification;
 

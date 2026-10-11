@@ -14,6 +14,8 @@ pub mod salary_structure_events;
 pub mod salary_structure_event_handlers;
 pub mod salary_component_events;
 pub mod salary_component_event_handlers;
+pub mod salary_component_version_events;
+pub mod salary_component_version_event_handlers;
 
 pub use compensation_change_events::{CompensationChangeEvent, CompensationChangeEventPublisher, NoopCompensationChangeEventPublisher};
 pub use compensation_change_event_handlers::CompensationChangeEventHandler;
@@ -27,4 +29,6 @@ pub use salary_structure_events::{SalaryStructureEvent, SalaryStructureEventPubl
 pub use salary_structure_event_handlers::SalaryStructureEventHandler;
 pub use salary_component_events::{SalaryComponentEvent, SalaryComponentEventPublisher, NoopSalaryComponentEventPublisher};
 pub use salary_component_event_handlers::SalaryComponentEventHandler;
+pub use salary_component_version_events::{SalaryComponentVersionEvent, SalaryComponentVersionEventPublisher, NoopSalaryComponentVersionEventPublisher};
+pub use salary_component_version_event_handlers::SalaryComponentVersionEventHandler;
 

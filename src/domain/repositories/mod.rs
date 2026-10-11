@@ -12,6 +12,7 @@ pub mod salary_slip_repository;
 pub mod salary_slip_line_repository;
 pub mod salary_structure_repository;
 pub mod salary_component_repository;
+pub mod salary_component_version_repository;
 
 // Re-exports
 pub use compensation_change_repository::{
@@ -49,4 +50,10 @@ pub use salary_component_repository::{
     SalaryComponentPaginationParams,
     SalaryComponentPaginatedResult,
     SalaryComponentFilter,
+};
+pub use salary_component_version_repository::{
+    SalaryComponentVersionRepository,
+    SalaryComponentVersionPaginationParams,
+    SalaryComponentVersionPaginatedResult,
+    SalaryComponentVersionFilter,
 };

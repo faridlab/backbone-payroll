@@ -8,6 +8,7 @@ pub mod salary_slip_domain_policy;
 pub mod salary_slip_line_domain_policy;
 pub mod salary_structure_domain_policy;
 pub mod salary_component_domain_policy;
+pub mod salary_component_version_domain_policy;
 
 pub use compensation_change_domain_policy::CompensationChangeDomainPolicy;
 pub use payroll_entry_domain_policy::PayrollEntryDomainPolicy;
@@ -15,4 +16,5 @@ pub use salary_slip_domain_policy::SalarySlipDomainPolicy;
 pub use salary_slip_line_domain_policy::SalarySlipLineDomainPolicy;
 pub use salary_structure_domain_policy::SalaryStructureDomainPolicy;
 pub use salary_component_domain_policy::SalaryComponentDomainPolicy;
+pub use salary_component_version_domain_policy::SalaryComponentVersionDomainPolicy;
 

@@ -173,6 +173,33 @@ pub struct SalaryComponentDeletedEvent {
 }
 
 // ============================================================================
+// SALARYCOMPONENTVERSION EVENTS
+// ============================================================================
+
+/// Event published when a SalaryComponentVersion is created
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalaryComponentVersionCreatedEvent {
+    pub id: SalaryComponentVersionId,
+    pub data: SalaryComponentVersionDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a SalaryComponentVersion is updated
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalaryComponentVersionUpdatedEvent {
+    pub id: SalaryComponentVersionId,
+    pub data: SalaryComponentVersionDto,
+    pub occurred_at: DateTime<Utc>,
+}
+
+/// Event published when a SalaryComponentVersion is deleted
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalaryComponentVersionDeletedEvent {
+    pub id: SalaryComponentVersionId,
+    pub occurred_at: DateTime<Utc>,
+}
+
+// ============================================================================
 // MODULE EVENT ENUM
 // ============================================================================
 
@@ -198,6 +225,9 @@ pub enum PayrollEvent {
     SalaryComponentCreated(SalaryComponentCreatedEvent),
     SalaryComponentUpdated(SalaryComponentUpdatedEvent),
     SalaryComponentDeleted(SalaryComponentDeletedEvent),
+    SalaryComponentVersionCreated(SalaryComponentVersionCreatedEvent),
+    SalaryComponentVersionUpdated(SalaryComponentVersionUpdatedEvent),
+    SalaryComponentVersionDeleted(SalaryComponentVersionDeletedEvent),
 }
 
 /// Metadata for module events

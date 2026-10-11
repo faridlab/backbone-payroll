@@ -18,6 +18,7 @@ use backbone_payroll::seeders::SeedSalarySlipSeeder;
 use backbone_payroll::seeders::SeedSalarySlipLineSeeder;
 use backbone_payroll::seeders::SeedSalaryStructureSeeder;
 use backbone_payroll::seeders::SeedSalaryComponentSeeder;
+use backbone_payroll::seeders::SeedSalaryComponentVersionSeeder;
 use backbone_payroll::seeders::Seeder;
 
 #[tokio::main]
@@ -52,6 +53,7 @@ async fn main() -> Result<()> {
     seeders.push(Box::new(SeedSalarySlipLineSeeder::new()));
     seeders.push(Box::new(SeedSalaryStructureSeeder::new()));
     seeders.push(Box::new(SeedSalaryComponentSeeder::new()));
+    seeders.push(Box::new(SeedSalaryComponentVersionSeeder::new()));
 
     // Sort by order
     seeders.sort_by_key(|s| s.order());

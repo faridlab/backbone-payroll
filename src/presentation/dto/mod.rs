@@ -11,6 +11,7 @@ pub mod salary_slip_dto;
 pub mod salary_slip_line_dto;
 pub mod salary_structure_dto;
 pub mod salary_component_dto;
+pub mod salary_component_version_dto;
 
 // Re-exports
 pub use compensation_change_dto::{
@@ -60,6 +61,14 @@ pub use salary_component_dto::{
     SalaryComponentResponseDto,
     SalaryComponentListResponseDto,
     SalaryComponentSummaryDto,
+};
+pub use salary_component_version_dto::{
+    CreateSalaryComponentVersionDto,
+    UpdateSalaryComponentVersionDto,
+    PatchSalaryComponentVersionDto,
+    SalaryComponentVersionResponseDto,
+    SalaryComponentVersionListResponseDto,
+    SalaryComponentVersionSummaryDto,
 };
 
 // Common pagination types

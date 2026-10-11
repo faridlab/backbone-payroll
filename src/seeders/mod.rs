@@ -15,6 +15,7 @@ mod salary_slip_seeder;
 mod salary_slip_line_seeder;
 mod salary_structure_seeder;
 mod salary_component_seeder;
+mod salary_component_version_seeder;
 
 pub use compensation_change_seeder::SeedCompensationChangeSeeder;
 pub use payroll_entry_seeder::SeedPayrollEntrySeeder;
@@ -22,6 +23,7 @@ pub use salary_slip_seeder::SeedSalarySlipSeeder;
 pub use salary_slip_line_seeder::SeedSalarySlipLineSeeder;
 pub use salary_structure_seeder::SeedSalaryStructureSeeder;
 pub use salary_component_seeder::SeedSalaryComponentSeeder;
+pub use salary_component_version_seeder::SeedSalaryComponentVersionSeeder;
 
 // ============================================================================
 // SEEDER TRAIT

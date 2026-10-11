@@ -8,6 +8,7 @@
 //! All standard CRUD methods are available via `Deref`.
 
 use anyhow::Result;
+use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -91,7 +92,13 @@ impl SalaryComponentRepository {
         Ok(())
     }
 
-    /// List a structure's components — the earnings and fixed deductions a slip is assembled from.
+    /// List a structure's components as they stand on `as_of` — the earnings and fixed deductions a
+    /// slip for a period starting that day is assembled from.
+    ///
+    /// A component with dated versions reads the version in force on `as_of`, and is not paid
+    /// before its first version or from a version that removes it; one without versions reads its
+    /// row. So a run for an earlier month reads what the structure was then, and a change planned
+    /// from a later date leaves this one alone.
     ///
     /// A read outside any transaction: takes the pool and runs `fetch_all_rows_scoped` so the
     /// composing service's tenancy RLS fence applies (ADR-0029). The caller relays the ambient org
@@ -101,18 +108,34 @@ impl SalaryComponentRepository {
         &self,
         pool: &PgPool,
         structure_id: Uuid,
+        as_of: NaiveDate,
     ) -> Result<Vec<ComponentRow>, sqlx::Error> {
-        // Only what a slip is assembled from: a removed (soft-deleted) item is not paid, and a
-        // statutory item (BPJS, PPh 21) only marks that the rule applies — its amount is the
-        // statutory line the run computes from gross, so reading it here would charge it twice.
+        // Only what a slip is assembled from: a removed item is not paid, and a statutory item
+        // (BPJS, PPh 21) only marks that the rule applies — its amount is the statutory line the
+        // run computes from gross, so reading it here would charge it twice.
         let rows = fetch_all_rows_scoped(
             pool,
             sqlx::query(
-                "SELECT name, component_type::text AS ct, amount, gl_account_id FROM payroll.salary_components
-                  WHERE structure_id=$1
-                    AND NOT is_statutory
-                    AND (metadata->>'deleted_at') IS NULL")
-                .bind(structure_id),
+                r#"SELECT COALESCE(v.name, c.name) AS name,
+                          COALESCE(v.component_type, c.component_type)::text AS ct,
+                          COALESCE(v.amount, c.amount) AS amount,
+                          COALESCE(v.gl_account_id, c.gl_account_id) AS gl_account_id
+                     FROM payroll.salary_components c
+                     LEFT JOIN LATERAL (
+                          SELECT x.name, x.component_type, x.amount, x.gl_account_id, x.is_statutory, x.removed
+                            FROM payroll.salary_component_versions x
+                           WHERE x.component_id = c.id AND x.effective_from <= $2
+                             AND (x.metadata->>'deleted_at') IS NULL
+                           ORDER BY x.effective_from DESC
+                           LIMIT 1) v ON true
+                    WHERE c.structure_id = $1
+                      AND CASE WHEN EXISTS (SELECT 1 FROM payroll.salary_component_versions y
+                                             WHERE y.component_id = c.id AND (y.metadata->>'deleted_at') IS NULL)
+                               THEN v.name IS NOT NULL AND NOT v.removed AND NOT v.is_statutory
+                               ELSE NOT c.is_statutory AND (c.metadata->>'deleted_at') IS NULL
+                          END"#)
+                .bind(structure_id)
+                .bind(as_of),
         )
         .await?;
         Ok(rows.iter().map(|r| ComponentRow {

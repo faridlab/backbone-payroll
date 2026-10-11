@@ -77,6 +77,66 @@ models:
       - type: index
         fields: [structure_id]
 
+  # A salary component's versions, each with the date it takes effect. A change is planned from a
+  # date: the run for a period reads the version in force on the period's first day, the same rule
+  # the statutory parameters follow. A component with versions is paid only from its first one and
+  # not from a version marked removed. Written only by the schedule-a-change verb; the component
+  # row itself carries the version in force today.
+  - name: SalaryComponentVersion
+    collection: salary_component_versions
+    # Data-change audit capture (ADR-0025): who planned each version, and when.
+    audited: true
+    read_only: true
+    description: "A salary component as it stands from a date: amount, type, statutory flag and GL account"
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique version id"
+      component_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(SalaryComponent.id)"]
+        description: "The component this version belongs to"
+      effective_from:
+        type: date
+        attributes: ["@required"]
+        description: "The first day this version is in force"
+      name:
+        type: string
+        attributes: ["@required", "@max(140)"]
+        description: "Component name from that date"
+      component_type:
+        type: ComponentType
+        attributes: ["@required", "@default(earning)"]
+        description: "earning or deduction from that date"
+      amount:
+        type: decimal
+        attributes: ["@default(0)", "@precision(18,2)", "@non_negative"]
+        description: "Fixed monthly amount (IDR) from that date"
+      gl_account_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "GL account # logical FK to accounting.Account.id"
+      is_statutory:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "A statutory marker from that date (its amount is the rule's, not this one)"
+      removed:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "The component is no longer paid from that date"
+      reason:
+        type: string?
+        attributes: ["@max(500)"]
+        description: "Why the component changes (a new regulation, an annual review)"
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+    indexes:
+      - type: unique
+        fields: [component_id, effective_from]
+
 enums:
   - name: SalaryStructureStatus
     description: "Lifecycle of a salary structure"

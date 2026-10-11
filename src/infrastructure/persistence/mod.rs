@@ -10,6 +10,7 @@ mod salary_slip_repository;
 mod salary_slip_line_repository;
 mod salary_structure_repository;
 mod salary_component_repository;
+mod salary_component_version_repository;
 
 // Custom persistence modules
 
@@ -20,6 +21,7 @@ pub use salary_slip_repository::SalarySlipRepository;
 pub use salary_slip_line_repository::SalarySlipLineRepository;
 pub use salary_structure_repository::SalaryStructureRepository;
 pub use salary_component_repository::SalaryComponentRepository;
+pub use salary_component_version_repository::SalaryComponentVersionRepository;
 
 // Re-export backbone-orm types
 pub use backbone_orm::repository::{

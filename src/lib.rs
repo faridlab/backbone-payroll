@@ -48,6 +48,7 @@ pub use application::service::SalarySlipService;
 pub use application::service::SalarySlipLineService;
 pub use application::service::SalaryStructureService;
 pub use application::service::SalaryComponentService;
+pub use application::service::SalaryComponentVersionService;
 
 use std::sync::Arc;
 use axum::Router;
@@ -72,6 +73,7 @@ pub struct PayrollModule {
     pub(crate) salary_slip_line_service: Arc<SalarySlipLineService>,
     pub(crate) salary_structure_service: Arc<SalaryStructureService>,
     pub(crate) salary_component_service: Arc<SalaryComponentService>,
+    pub(crate) salary_component_version_service: Arc<SalaryComponentVersionService>,
     /// The module's extension state (`lib.ext.rs`); its fields read through `Deref`.
     pub(crate) ext: ModuleExt,
 }
@@ -105,6 +107,8 @@ pub(crate) struct ModuleParts<'a> {
     pub(crate) salary_structure_repository: &'a Arc<SalaryStructureRepository>,
     pub(crate) salary_component_service: &'a Arc<SalaryComponentService>,
     pub(crate) salary_component_repository: &'a Arc<SalaryComponentRepository>,
+    pub(crate) salary_component_version_service: &'a Arc<SalaryComponentVersionService>,
+    pub(crate) salary_component_version_repository: &'a Arc<SalaryComponentVersionRepository>,
 }
 
 impl PayrollModule {
@@ -126,6 +130,7 @@ impl PayrollModule {
             create_salary_slip_line_routes,
             create_salary_structure_routes,
             create_salary_component_routes,
+            create_salary_component_version_read_routes,
         };
 
         Router::new()
@@ -135,6 +140,7 @@ impl PayrollModule {
             .merge(create_salary_slip_line_routes(self.salary_slip_line_service.clone()))
             .merge(create_salary_structure_routes(self.salary_structure_service.clone()))
             .merge(create_salary_component_routes(self.salary_component_service.clone()))
+            .merge(create_salary_component_version_read_routes(self.salary_component_version_service.clone()))
     }
 
     /// Deprecated alias for [`Self::all_crud_routes`]. `routes()` reads like
@@ -160,6 +166,7 @@ impl PayrollModule {
             create_salary_slip_line_read_routes,
             create_salary_structure_read_routes,
             create_salary_component_read_routes,
+            create_salary_component_version_read_routes,
         };
 
         Router::new()
@@ -169,6 +176,7 @@ impl PayrollModule {
             .merge(create_salary_slip_line_read_routes(self.salary_slip_line_service.clone()))
             .merge(create_salary_structure_read_routes(self.salary_structure_service.clone()))
             .merge(create_salary_component_read_routes(self.salary_component_service.clone()))
+            .merge(create_salary_component_version_read_routes(self.salary_component_version_service.clone()))
     }
 
 }
@@ -238,6 +246,10 @@ impl PayrollModuleBuilder {
         let salary_component_repository = Arc::new(SalaryComponentRepository::new(db_pool.clone()));
         let salary_component_service = Arc::new(SalaryComponentService::with_repository(salary_component_repository.clone()));
 
+        // SalaryComponentVersion service
+        let salary_component_version_repository = Arc::new(SalaryComponentVersionRepository::new(db_pool.clone()));
+        let salary_component_version_service = Arc::new(SalaryComponentVersionService::with_repository(salary_component_version_repository.clone()));
+
 
         // The extension builds its own state from what the generated build made.
         let ext = self.ext.build(&ModuleParts {
@@ -254,6 +266,8 @@ impl PayrollModuleBuilder {
             salary_structure_repository: &salary_structure_repository,
             salary_component_service: &salary_component_service,
             salary_component_repository: &salary_component_repository,
+            salary_component_version_service: &salary_component_version_service,
+            salary_component_version_repository: &salary_component_version_repository,
         })?;
 
         Ok(PayrollModule {
@@ -263,6 +277,7 @@ impl PayrollModuleBuilder {
             salary_slip_line_service,
             salary_structure_service,
             salary_component_service,
+            salary_component_version_service,
             ext,
         })
     }

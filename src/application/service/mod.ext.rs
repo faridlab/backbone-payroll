@@ -28,6 +28,8 @@ pub mod onboarding_enrolled_handler;
 pub mod hire_compensation_handler;
 // A run beside the run before it: the read behind checking a run before it is approved.
 pub mod payroll_comparison;
+// Changing a structure from a date: plan, withdraw, and the daily pass that applies due changes.
+pub mod pay_schedule;
 pub use payroll_gl::{
     AccountingPostEnvelope, GlPostAck, GlPostLine, GlPostRejected, GlPostSink, UnwiredGlSink,
 };
@@ -51,6 +53,7 @@ pub use statutory_calcs::{
     Pph21Bracket, Pph21Config, Pph21Method, PtkpTier, StatutoryComponent, StatutoryConfig,
     StatutoryError, TerCategory, TerRateBand,
 };
+pub use pay_schedule::{structure_versions, PlanOutcome, PlannedChange, PlannedItem};
 pub use payroll_comparison::{compare_runs, ComponentChange, PersonChange, RunComparison, RunTotals};
 pub use promotion_salary_handler::PromotionSalaryHandler;
 pub use offboarding_settlement_handler::OffboardingSettlementHandler;

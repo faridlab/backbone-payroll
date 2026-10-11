@@ -12,6 +12,7 @@ pub mod salary_slip_api_test;
 pub mod salary_slip_line_api_test;
 pub mod salary_structure_api_test;
 pub mod salary_component_api_test;
+pub mod salary_component_version_api_test;
 
 // Re-exports for convenience
 pub use compensation_change_api_test::*;
@@ -20,3 +21,4 @@ pub use salary_slip_api_test::*;
 pub use salary_slip_line_api_test::*;
 pub use salary_structure_api_test::*;
 pub use salary_component_api_test::*;
+pub use salary_component_version_api_test::*;

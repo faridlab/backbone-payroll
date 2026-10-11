@@ -11,6 +11,7 @@ pub mod salary_slip_validator;
 pub mod salary_slip_line_validator;
 pub mod salary_structure_validator;
 pub mod salary_component_validator;
+pub mod salary_component_version_validator;
 
 pub use compensation_change_validator::{CompensationChangeValidator, compensation_change_validator};
 pub use payroll_entry_validator::{PayrollEntryValidator, payroll_entry_validator};
@@ -18,4 +19,5 @@ pub use salary_slip_validator::{SalarySlipValidator, salary_slip_validator};
 pub use salary_slip_line_validator::{SalarySlipLineValidator, salary_slip_line_validator};
 pub use salary_structure_validator::{SalaryStructureValidator, salary_structure_validator};
 pub use salary_component_validator::{SalaryComponentValidator, salary_component_validator};
+pub use salary_component_version_validator::{SalaryComponentVersionValidator, salary_component_version_validator};
 

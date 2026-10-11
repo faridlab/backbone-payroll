@@ -381,6 +381,69 @@ pub struct SalaryComponentRef {
 }
 
 // ============================================================================
+// SALARYCOMPONENTVERSION TYPES
+// ============================================================================
+
+/// Type-safe ID for SalaryComponentVersion
+///
+/// Use this instead of raw Uuid for type safety across modules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SalaryComponentVersionId(pub Uuid);
+
+impl SalaryComponentVersionId {
+    pub fn new(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+}
+
+impl From<Uuid> for SalaryComponentVersionId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<SalaryComponentVersionId> for Uuid {
+    fn from(id: SalaryComponentVersionId) -> Self {
+        id.0
+    }
+}
+
+/// Data transfer object for SalaryComponentVersion
+///
+/// This is the public representation of SalaryComponentVersion for other modules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalaryComponentVersionDto {
+    pub id: SalaryComponentVersionId,
+    pub component_id: Uuid,
+    pub effective_from: NaiveDate,
+    pub name: String,
+    pub component_type: ComponentType,
+    pub amount: Decimal,
+    pub gl_account_id: Uuid,
+    pub is_statutory: bool,
+    pub removed: bool,
+    pub reason: Option<String>,
+    pub metadata: serde_json::Value,
+}
+
+/// Summary view of SalaryComponentVersion for list displays
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalaryComponentVersionSummary {
+    pub id: SalaryComponentVersionId,
+    pub name: String,
+}
+
+/// Reference to SalaryComponentVersion for foreign key relationships
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalaryComponentVersionRef {
+    pub id: SalaryComponentVersionId,
+}
+
+// ============================================================================
 // CUSTOM TYPES
 // ============================================================================
 

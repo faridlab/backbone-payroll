@@ -5,7 +5,8 @@
 //! fabricate slip lines, or soft-delete a structure out from under live slips. Here:
 //!
 //! - **Entity reads**: GETs only (slips + slip lines are proof surfaces — what the verbs produced).
-//! - **Structure/component CRUD**: master data — full generated CRUD (admin surface).
+//! - **Structure CRUD**: master data — full generated CRUD (admin surface). Components are read
+//!   here and change only through the dated structure change (`/salary-structures/:id/changes`).
 //! - **Writes**: every payroll mutation goes through [`PayrollWriteService`], which owns the run
 //!   lifecycle (`draft → processed → posted`, at-most-once GL post), the slip roll-up, the balanced
 //!   salary journal, and the fail-closed seams (GL / remittance default-unwired).
@@ -37,11 +38,11 @@ use uuid::Uuid;
 
 use crate::application::service::{
     ComputedSlipRequest, NewComponent, NewPayrollEntry, NewStructure, PayrollError,
-    PayrollWriteService, StatutoryAccounts,
+    PayrollWriteService, PlannedChange, PlannedItem, StatutoryAccounts,
 };
 use crate::presentation::http::{
     create_compensation_change_read_routes, create_payroll_entry_read_routes,
-    create_salary_component_routes, create_salary_slip_line_read_routes,
+    create_salary_component_read_routes, create_salary_slip_line_read_routes,
     create_salary_slip_read_routes, create_salary_structure_routes,
 };
 use crate::PayrollModule;
@@ -349,9 +350,107 @@ async fn compare_run(
     }
 }
 
+// ── structure changes from a date ──────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlannedItemBody {
+    /// Absent: a new item from the date.
+    component_id: Option<Uuid>,
+    name: String,
+    component_type: String,
+    amount: Decimal,
+    gl_account_id: Uuid,
+    #[serde(default)]
+    is_statutory: bool,
+    #[serde(default)]
+    removed: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlanChangeBody {
+    effective_from: NaiveDate,
+    reason: Option<String>,
+    items: Vec<PlannedItemBody>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WithdrawChangeBody {
+    effective_from: NaiveDate,
+}
+
+/// `POST /salary-structures/:id/changes` — change the structure from a date: each item's new
+/// values, items added (no `componentId`), items no longer paid (`removed`). Runs for periods
+/// starting on or after `effectiveFrom` read it; earlier ones keep what the structure was. Refused
+/// when it would reach a run already processed or posted. The answer names the draft runs whose
+/// slips were worked out before it.
+async fn plan_structure_change(
+    State(svc): State<Arc<PayrollWriteService>>,
+    _org: OrgContext,
+    Path(id): Path<Uuid>,
+    Json(b): Json<PlanChangeBody>,
+) -> axum::response::Response {
+    let change = PlannedChange {
+        structure_id: id,
+        effective_from: b.effective_from,
+        reason: b.reason,
+        items: b
+            .items
+            .into_iter()
+            .map(|i| PlannedItem {
+                component_id: i.component_id,
+                name: i.name,
+                component_type: i.component_type,
+                amount: i.amount,
+                gl_account_id: i.gl_account_id,
+                is_statutory: i.is_statutory,
+                removed: i.removed,
+            })
+            .collect(),
+    };
+    match svc.plan_structure_change(change).await {
+        Ok(o) => (StatusCode::CREATED, Json(serde_json::json!({ "success": true, "data": o }))).into_response(),
+        Err(e) => err_response(e),
+    }
+}
+
+/// `POST /salary-structures/:id/changes/withdraw` — withdraw the change planned from a date still
+/// to come; an item it would have added goes with it.
+async fn withdraw_structure_change(
+    State(svc): State<Arc<PayrollWriteService>>,
+    _org: OrgContext,
+    Path(id): Path<Uuid>,
+    Json(b): Json<WithdrawChangeBody>,
+) -> axum::response::Response {
+    match svc.withdraw_structure_change(id, b.effective_from).await {
+        Ok(n) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "success": true, "data": { "withdrawn": n } })),
+        )
+            .into_response(),
+        Err(e) => err_response(e),
+    }
+}
+
+/// `GET /salary-structures/:id/versions` — every dated version of the structure's items, oldest
+/// first: what each was, is, and is planned to be. Read-only.
+async fn structure_versions(
+    _org: OrgContext,
+    State(svc): State<Arc<PayrollWriteService>>,
+    Path(id): Path<Uuid>,
+) -> axum::response::Response {
+    let pool = svc.read_pool();
+    match crate::application::service::structure_versions(&pool, id).await {
+        Ok(v) => (StatusCode::OK, Json(serde_json::json!({ "success": true, "data": v }))).into_response(),
+        Err(e) => err_response(e),
+    }
+}
+
 // ── composition ────────────────────────────────────────────────────────────────
 
-/// Build the guarded payroll router: entity reads + structure/component CRUD + the run verbs,
+/// Build the guarded payroll router: entity reads + structure CRUD + the run and structure-change verbs,
 /// NO generic run/slip/slip-line mutation. Mount under the host's org-auth tree (ADR-0029): the
 /// composing service's middleware holds the ambient org request scope its tenancy decorator
 /// fenced the tables with.
@@ -365,10 +464,15 @@ pub fn create_guarded_payroll_routes(m: &PayrollModule) -> Router {
         .route("/payroll-entries/:id/cancel", post(cancel_run))
         .route("/payroll-entries/:id/remit", post(remit_run))
         .route("/payroll-entries/:id/comparison", get(compare_run))
+        .route("/salary-structures/:id/changes", post(plan_structure_change))
+        .route("/salary-structures/:id/changes/withdraw", post(withdraw_structure_change))
+        .route("/salary-structures/:id/versions", get(structure_versions))
         .with_state(m.payroll_write_service());
 
-    // Reads: run/slip/slip-line/compensation GETs (proof surfaces). Structures + components mount
-    // full CRUD (master data, the admin surface). Generic run/slip/slip-line WRITES are
+    // Reads: run/slip/slip-line/compensation GETs (proof surfaces). Structures mount full CRUD
+    // (master data, the admin surface). Components mount reads only: a component changes through
+    // the dated structure change, since a run reads the version in force for its period and a
+    // plain edit of the row would never reach it. Generic run/slip/slip-line WRITES are
     // deliberately absent — every mutation flows through the verbs above.
     Router::new()
         .merge(create_payroll_entry_read_routes(m.payroll_entry_service.clone()))
@@ -376,7 +480,7 @@ pub fn create_guarded_payroll_routes(m: &PayrollModule) -> Router {
         .merge(create_salary_slip_line_read_routes(m.salary_slip_line_service.clone()))
         .merge(create_compensation_change_read_routes(m.compensation_change_service.clone()))
         .merge(create_salary_structure_routes(m.salary_structure_service.clone()))
-        .merge(create_salary_component_routes(m.salary_component_service.clone()))
+        .merge(create_salary_component_read_routes(m.salary_component_service.clone()))
         .merge(writes)
 
     // Bind the composer's request pool (ADR-0029 pool law) for every verb

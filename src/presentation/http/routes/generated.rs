@@ -15,6 +15,7 @@ use super::{
     salary_slip_line_handler::create_salary_slip_line_routes,
     salary_structure_handler::create_salary_structure_routes,
     salary_component_handler::create_salary_component_routes,
+    salary_component_version_handler::create_salary_component_version_read_routes,
 };
 
 use crate::application::service::{
@@ -24,6 +25,7 @@ use crate::application::service::{
     SalarySlipLineService,
     SalaryStructureService,
     SalaryComponentService,
+    SalaryComponentVersionService,
 };
 
 /// Services collection for all CRUD endpoints
@@ -34,6 +36,7 @@ pub struct HttpServices {
     pub salary_slip_line: Arc<SalarySlipLineService>,
     pub salary_structure: Arc<SalaryStructureService>,
     pub salary_component: Arc<SalaryComponentService>,
+    pub salary_component_version: Arc<SalaryComponentVersionService>,
 }
 
 /// Configure all HTTP routes for this module using Axum and BackboneCrudHandler.
@@ -65,6 +68,8 @@ pub fn configure_routes(services: HttpServices) -> Router {
         .merge(create_salary_structure_routes(services.salary_structure))
         // SalaryComponent routes (12 Backbone endpoints)
         .merge(create_salary_component_routes(services.salary_component))
+        // SalaryComponentVersion routes (READ-ONLY — append-only/event-sourced entity; writes arrive via the event handlers)
+        .merge(create_salary_component_version_read_routes(services.salary_component_version))
 }
 
 /// Create an individual entity's routes (for modular configuration)
@@ -93,6 +98,10 @@ pub mod individual {
 
     pub fn salary_component_routes(service: Arc<SalaryComponentService>) -> Router {
         create_salary_component_routes(service)
+    }
+
+    pub fn salary_component_version_routes(service: Arc<SalaryComponentVersionService>) -> Router {
+        create_salary_component_version_read_routes(service)
     }
 
 }

@@ -10,3 +10,8 @@ pub use salary_slip_line_repository::{DeductionGroupRow, NewSlipLineRow};
 pub use salary_slip_repository::{NewSalarySlipRow, SlipTotalsRow};
 pub use salary_structure_repository::NewStructureRow;
 pub use statutory_params_repository::StatutoryParamsRepository;
+// Changing a structure from a date: the component versions and the rows they keep current.
+mod pay_schedule_repository;
+pub use pay_schedule_repository::{
+    PayScheduleRepository, RunReached, StandingComponent, StructureVersion, VersionRow, BASELINE_FROM,
+};

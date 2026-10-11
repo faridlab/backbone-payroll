@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use crate::infrastructure::persistence::{
     NewComponentRow, NewPayrollEntryRow, NewSalarySlipRow, NewSlipLineRow, NewStructureRow,
-    PayrollEntryRepository, SalaryComponentRepository, SalarySlipLineRepository, SalarySlipRepository,
+    PayrollEntryRepository, RunPeriodRow, SalaryComponentRepository, SalarySlipLineRepository, SalarySlipRepository,
     SalaryStructureRepository, StatutoryParamsRepository,
 };
 
@@ -42,6 +42,24 @@ fn legacy_company_echo() -> Uuid {
     org_scope::current_org_scope()
         .and_then(|s| s.legacy_company_id())
         .unwrap_or(Uuid::nil())
+}
+
+/// A run's window: its own bounds when it carries a cut-off (26th→25th is common practice), else
+/// the calendar month named by (period_year, period_month).
+fn run_window(run: &RunPeriodRow) -> Result<(NaiveDate, NaiveDate), PayrollError> {
+    if let (Some(start), Some(end)) = (run.period_start, run.period_end) {
+        return Ok((start, end));
+    }
+    let month = u32::try_from(run.period_month)
+        .map_err(|_| PayrollError::Invalid("period_month is not a valid month".into()))?;
+    let start = NaiveDate::from_ymd_opt(run.period_year, month, 1)
+        .ok_or(PayrollError::Invalid("run period is not a real calendar month".into()))?;
+    // Period end = day before the next month's first (year-rollover safe).
+    let (ny, nm) = if month == 12 { (run.period_year + 1, 1) } else { (run.period_year, month + 1) };
+    let end = NaiveDate::from_ymd_opt(ny, nm, 1)
+        .and_then(|d| d.pred_opt())
+        .ok_or(PayrollError::Invalid("run period end is not a real calendar date".into()))?;
+    Ok((start, end))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -416,6 +434,37 @@ impl PayrollWriteService {
         Ok(id)
     }
 
+    /// Change a structure from a date: what each item is from then on, items added, items no
+    /// longer paid. A run for a period starting on or after the date reads it; earlier periods keep
+    /// what the structure was. Dated today or earlier, it is in force at once.
+    pub async fn plan_structure_change(
+        &self,
+        c: super::pay_schedule::PlannedChange,
+    ) -> Result<super::pay_schedule::PlanOutcome, PayrollError> {
+        super::pay_schedule::plan_change(&self.rpool(), c, chrono::Utc::now().date_naive()).await
+    }
+
+    /// Withdraw a structure change whose date is still to come. Returns how many items it set.
+    pub async fn withdraw_structure_change(
+        &self,
+        structure_id: Uuid,
+        effective_from: NaiveDate,
+    ) -> Result<u64, PayrollError> {
+        super::pay_schedule::withdraw_change(
+            &self.rpool(),
+            structure_id,
+            effective_from,
+            chrono::Utc::now().date_naive(),
+        )
+        .await
+    }
+
+    /// Bring every structure in scope up to the changes whose day has come — the daily pass.
+    /// Running it again changes nothing. Returns how many pay items moved.
+    pub async fn apply_due_structure_changes(&self, today: NaiveDate) -> Result<u64, PayrollError> {
+        super::pay_schedule::apply_due_changes(&self.rpool(), today).await
+    }
+
     /// Open a payroll run for a period (draft). Unique per (org unit, year, month) once the
     /// composing service's tenancy decorator has re-declared the run unique org-scoped.
     pub async fn create_payroll_entry(&self, e: NewPayrollEntry) -> Result<Uuid, PayrollError> {
@@ -466,12 +515,13 @@ impl PayrollWriteService {
         // Tenancy (ADR-0029), ID-only pattern: identified by the run id alone. The lookup rides the
         // ambient org request scope — under HTTP the request-dedicated connection carries it, so
         // another unit's run simply isn't found; an undecorated deployment is unfenced by design.
-        let run = self.entries.find_state_by_id(&self.rpool(), run_id).await?
+        let run = self.entries.find_period_by_id(&self.rpool(), run_id).await?
             .ok_or(PayrollError::NotFound("payroll run"))?;
         if run.status != "draft" {
             return Err(PayrollError::InvalidState("run is not draft"));
         }
-        let PricedSlip { lines, gross, deductions, net, unpaid } = self.price_slip(&s).await?;
+        let (period_start, _) = run_window(&run)?;
+        let PricedSlip { lines, gross, deductions, net, unpaid } = self.price_slip(&s, period_start).await?;
 
         let slip_id = Uuid::new_v4();
         let mut tx = self.rpool().begin().await?;
@@ -528,7 +578,8 @@ impl PayrollWriteService {
     /// Price a slip as [`Self::add_salary_slip`] writes it: the structure's earnings prorated by
     /// unpaid days, its fixed deductions, and the statutory lines — with nothing written. The save
     /// and the preview read the same numbers from here, so a preview never states a different slip.
-    async fn price_slip(&self, s: &NewSalarySlip) -> Result<PricedSlip, PayrollError> {
+    /// The structure is read as it stands on `period_start`, the first day of the run's period.
+    async fn price_slip(&self, s: &NewSalarySlip, period_start: NaiveDate) -> Result<PricedSlip, PayrollError> {
         if s.working_days <= Decimal::ZERO {
             return Err(PayrollError::Invalid("working_days must be positive".into()));
         }
@@ -540,7 +591,7 @@ impl PayrollWriteService {
         let factor = (s.working_days - unpaid) / s.working_days; // proration for unpaid days
 
         // Load the structure components.
-        let comps = self.components.list_by_structure(&self.rpool(), s.structure_id).await?;
+        let comps = self.components.list_by_structure(&self.rpool(), s.structure_id, period_start).await?;
         if comps.is_empty() {
             return Err(PayrollError::Invalid("salary structure has no components".into()));
         }
@@ -599,7 +650,7 @@ impl PayrollWriteService {
     /// salary being paid); overtime pay rides in as an ordinary earning line so gross stays balanced
     /// through the existing journal.
     pub async fn add_computed_salary_slip(&self, r: ComputedSlipRequest) -> Result<Uuid, PayrollError> {
-        let slip = self.build_computed_slip(&r).await?;
+        let (slip, _) = self.build_computed_slip(&r).await?;
         self.add_salary_slip(r.run_id, slip).await
     }
 
@@ -610,8 +661,8 @@ impl PayrollWriteService {
         &self,
         r: ComputedSlipRequest,
     ) -> Result<SlipPreview, PayrollError> {
-        let slip = self.build_computed_slip(&r).await?;
-        let priced = self.price_slip(&slip).await?;
+        let (slip, period_start) = self.build_computed_slip(&r).await?;
+        let priced = self.price_slip(&slip, period_start).await?;
         Ok(SlipPreview {
             gross: priced.gross,
             deductions: priced.deductions,
@@ -620,8 +671,12 @@ impl PayrollWriteService {
         })
     }
 
-    /// One employee's slip as the computed path assembles it, before it is priced and written.
-    async fn build_computed_slip(&self, r: &ComputedSlipRequest) -> Result<NewSalarySlip, PayrollError> {
+    /// One employee's slip as the computed path assembles it, before it is priced and written,
+    /// with the first day of the run's period it is priced as of.
+    async fn build_computed_slip(
+        &self,
+        r: &ComputedSlipRequest,
+    ) -> Result<(NewSalarySlip, NaiveDate), PayrollError> {
         let risk_class = u8::try_from(r.risk_class)
             .ok()
             .filter(|rc| (1..=5).contains(rc))
@@ -634,22 +689,7 @@ impl PayrollWriteService {
         }
         let month = u32::try_from(run.period_month)
             .map_err(|_| PayrollError::Invalid("period_month is not a valid month".into()))?;
-        // The run's window: its own bounds when it carries a cut-off
-        // (26th→25th is common practice), else the calendar month named by
-        // (period_year, period_month).
-        let (period_start, period_end) = match (run.period_start, run.period_end) {
-            (Some(start), Some(end)) => (start, end),
-            _ => {
-                let start = NaiveDate::from_ymd_opt(run.period_year, month, 1)
-                    .ok_or(PayrollError::Invalid("run period is not a real calendar month".into()))?;
-                // Period end = day before the next month's first (year-rollover safe).
-                let (ny, nm) = if month == 12 { (run.period_year + 1, 1) } else { (run.period_year, month + 1) };
-                let end = NaiveDate::from_ymd_opt(ny, nm, 1)
-                    .and_then(|d| d.pred_opt())
-                    .ok_or(PayrollError::Invalid("run period end is not a real calendar date".into()))?;
-                (start, end)
-            }
-        };
+        let (period_start, period_end) = run_window(&run)?;
 
         // Fail-closed parameter resolution: the effective set as of the period's first day. A period
         // before any seed date (or a table an operator emptied) refuses rather than zeroing tax.
@@ -664,7 +704,7 @@ impl PayrollWriteService {
 
         // Statutory base: the structure's monthly earning total (un-prorated — the salary being
         // paid; proration is a slip-line concern the earnings factor already applies).
-        let comps = self.components.list_by_structure(&self.rpool(), r.structure_id).await?;
+        let comps = self.components.list_by_structure(&self.rpool(), r.structure_id, period_start).await?;
         let gross_monthly: Decimal = comps
             .iter()
             .filter(|c| c.component_type == "earning")
@@ -785,16 +825,19 @@ impl PayrollWriteService {
             });
         }
 
-        Ok(NewSalarySlip {
-            employee_id: r.employee_id,
-            structure_id: r.structure_id,
-            working_days: r.working_days,
-            unpaid_days: r.unpaid_days,
-            statutory,
-            overtime_hours,
-            tax_method: Some(method.label().to_string()),
-            timesheet_approval_id,
-        })
+        Ok((
+            NewSalarySlip {
+                employee_id: r.employee_id,
+                structure_id: r.structure_id,
+                working_days: r.working_days,
+                unpaid_days: r.unpaid_days,
+                statutory,
+                overtime_hours,
+                tax_method: Some(method.label().to_string()),
+                timesheet_approval_id,
+            },
+            period_start,
+        ))
     }
 
     /// Roll the run's slips up into its totals and move `draft → processed` (ready to post).

@@ -11,6 +11,7 @@ pub mod salary_slip_handler;
 pub mod salary_slip_line_handler;
 pub mod salary_structure_handler;
 pub mod salary_component_handler;
+pub mod salary_component_version_handler;
 
 
 // Re-exports
@@ -20,6 +21,7 @@ pub use salary_slip_handler::{create_salary_slip_routes, create_salary_slip_read
 pub use salary_slip_line_handler::{create_salary_slip_line_routes, create_salary_slip_line_read_routes, create_salary_slip_line_write_routes};
 pub use salary_structure_handler::{create_salary_structure_routes, create_salary_structure_read_routes, create_salary_structure_write_routes};
 pub use salary_component_handler::{create_salary_component_routes, create_salary_component_read_routes, create_salary_component_write_routes};
+pub use salary_component_version_handler::{create_salary_component_version_routes, create_salary_component_version_read_routes, create_salary_component_version_write_routes, create_salary_component_version_history_route};
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

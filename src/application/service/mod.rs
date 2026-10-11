@@ -13,6 +13,7 @@ pub mod salary_slip_service;
 pub mod salary_slip_line_service;
 pub mod salary_structure_service;
 pub mod salary_component_service;
+pub mod salary_component_version_service;
 
 
 pub use compensation_change_service::CompensationChangeService;
@@ -21,6 +22,7 @@ pub use salary_slip_service::SalarySlipService;
 pub use salary_slip_line_service::SalarySlipLineService;
 pub use salary_structure_service::SalaryStructureService;
 pub use salary_component_service::SalaryComponentService;
+pub use salary_component_version_service::SalaryComponentVersionService;
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");
