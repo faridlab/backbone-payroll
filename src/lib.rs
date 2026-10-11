@@ -25,26 +25,17 @@ pub mod presentation;
 pub mod seeders;
 pub mod exports;
 // <<< CUSTOM MODULES
-// The hand-owned request-pool shim (the composing service's tenant pool
-// resolution): a generated-tree declaration the regenerator drops, so it
-// lives in the preserved block (#447 cause-2 class).
-pub mod request_pool;
-// The validated run verbs (lifecycle + computed slips + the write-service request/outcome types),
-// the fail-closed seams (GL post / remittance / domain events), the overtime + employee-statutory
-// input ports, the statutory calculators, and the guarded HTTP composition. Re-exported so a
-// host composes payroll without reaching into internal module paths.
-pub use application::service::{
-    bpjs_kesehatan, bpjs_ketenagakerjaan, compute_statutory, overtime_pay, pph21, pph21_ter, thr,
-    AccountingPostEnvelope, ComputedSlipRequest, EmployeeStatutory, EmployeeStatutoryInputs,
-    GlPostAck, GlPostLine, GlPostRejected, GlPostSink, LoggingSink, NewComponent, NewPayrollEntry,
-    NewSalarySlip, NewStructure, OvertimeInputs, PayrollError, PayrollEvent, PayrollEventError,
-    PayrollEventSink, PayrollPayable, PayrollPosted, PayrollWriteService, PoolEmployeeStatutoryInputs,
-    PoolOvertimeInputs, PostOutcome, Pph21Method, RemitAck, RemitOutcome, RemittanceInstruction,
-    RemittanceSeamError, RemittanceSink, StatutoryAccounts, StatutoryConfig, StatutoryError,
-    UnwiredGlSink, UnwiredRemittance,
-};
-pub use presentation::http::create_guarded_payroll_routes;
 // END CUSTOM
+
+// The module's extension (hand-written; ADR-0031).
+#[path = "lib.ext.rs"]
+mod lib_ext;
+pub use lib_ext::*;
+/// This crate's module and builder under fixed names, for the extension's `impl` blocks.
+#[allow(dead_code)]
+pub(crate) type ThisModule = PayrollModule;
+#[allow(dead_code)]
+pub(crate) type ThisModuleBuilder = PayrollModuleBuilder;
 
 // Re-exports for convenience - Domain entities
 pub use domain::entity::*;
@@ -83,11 +74,41 @@ pub struct PayrollModule {
     pub(crate) salary_slip_line_service: Arc<SalarySlipLineService>,
     pub(crate) salary_structure_service: Arc<SalaryStructureService>,
     pub(crate) salary_component_service: Arc<SalaryComponentService>,
+    /// The module's extension state (`lib.ext.rs`); its fields read through `Deref`.
+    pub(crate) ext: ModuleExt,
     // <<< CUSTOM FIELDS
-    // The validated write path: run lifecycle, computed slips, the balanced salary journal, and
-    // the module-held fail-closed seams (GL / events / remittance default Unwired/Logging/Unwired).
-    pub(crate) payroll_write_service: Arc<PayrollWriteService>,
     // END CUSTOM
+}
+
+impl std::ops::Deref for PayrollModule {
+    type Target = ModuleExt;
+    fn deref(&self) -> &Self::Target {
+        &self.ext
+    }
+}
+
+impl std::ops::DerefMut for PayrollModule {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ext
+    }
+}
+
+/// What the extension's `build` hook receives from the generated build (ADR-0031).
+#[allow(dead_code)]
+pub(crate) struct ModuleParts<'a> {
+    pub(crate) db_pool: &'a PgPool,
+    pub(crate) compensation_change_service: &'a Arc<CompensationChangeService>,
+    pub(crate) compensation_change_repository: &'a Arc<CompensationChangeRepository>,
+    pub(crate) payroll_entry_service: &'a Arc<PayrollEntryService>,
+    pub(crate) payroll_entry_repository: &'a Arc<PayrollEntryRepository>,
+    pub(crate) salary_slip_service: &'a Arc<SalarySlipService>,
+    pub(crate) salary_slip_repository: &'a Arc<SalarySlipRepository>,
+    pub(crate) salary_slip_line_service: &'a Arc<SalarySlipLineService>,
+    pub(crate) salary_slip_line_repository: &'a Arc<SalarySlipLineRepository>,
+    pub(crate) salary_structure_service: &'a Arc<SalaryStructureService>,
+    pub(crate) salary_structure_repository: &'a Arc<SalaryStructureRepository>,
+    pub(crate) salary_component_service: &'a Arc<SalaryComponentService>,
+    pub(crate) salary_component_repository: &'a Arc<SalaryComponentRepository>,
 }
 
 impl PayrollModule {
@@ -155,38 +176,29 @@ impl PayrollModule {
     }
 
     // <<< CUSTOM METHODS
-    /// The module-held validated write service (run verbs, computed slips, seams).
-    pub fn payroll_write_service(&self) -> Arc<PayrollWriteService> {
-        self.payroll_write_service.clone()
-    }
-
-    /// Replace the write service at the composition root — the way a host wires real adapters over
-    /// the fail-closed seams (e.g. staging domain events into an outbox) or swaps the pool-default
-    /// input ports for adapters over the attendance/employee exports. Consuming `self` keeps the
-    /// builder chain reading naturally:
-    ///
-    /// ```text
-    /// let payroll = PayrollModule::builder()
-    ///     .with_database(pool.clone())
-    ///     .build()?
-    ///     .with_payroll_write_service(Arc::new(
-    ///         PayrollWriteService::new(pool.clone()).with_event_sink(my_outbox_sink),
-    ///     ));
-    /// ```
-    ///
-    /// Call before mounting routes; the module is consumed once at startup.
-    pub fn with_payroll_write_service(mut self, svc: Arc<PayrollWriteService>) -> Self {
-        self.payroll_write_service = svc;
-        self
-    }
     // END CUSTOM
 }
 
 /// Builder for PayrollModule
 pub struct PayrollModuleBuilder {
     db_pool: Option<PgPool>,
+    /// The builder's extension state (`lib.ext.rs`); its fields read through `Deref`.
+    ext: ModuleBuilderExt,
     // <<< CUSTOM BUILDER FIELDS
     // END CUSTOM
+}
+
+impl std::ops::Deref for PayrollModuleBuilder {
+    type Target = ModuleBuilderExt;
+    fn deref(&self) -> &Self::Target {
+        &self.ext
+    }
+}
+
+impl std::ops::DerefMut for PayrollModuleBuilder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ext
+    }
 }
 
 impl PayrollModuleBuilder {
@@ -194,6 +206,7 @@ impl PayrollModuleBuilder {
     pub fn new() -> Self {
         Self {
             db_pool: None,
+            ext: Default::default(),
             // <<< CUSTOM BUILDER DEFAULTS
             // END CUSTOM
         }
@@ -238,11 +251,24 @@ impl PayrollModuleBuilder {
         let salary_component_service = Arc::new(SalaryComponentService::with_repository(salary_component_repository.clone()));
 
         // <<< CUSTOM
-        // The validated write path over the same pool: pool-default input ports (works standalone),
-        // seams fail-closed (Unwired GL / Logging events / Unwired remittance) — a composition root
-        // swaps them via `with_payroll_write_service`.
-        let payroll_write_service = Arc::new(PayrollWriteService::new(db_pool.clone()));
         // END CUSTOM
+
+        // The extension builds its own state from what the generated build made.
+        let ext = self.ext.build(&ModuleParts {
+            db_pool: &db_pool,
+            compensation_change_service: &compensation_change_service,
+            compensation_change_repository: &compensation_change_repository,
+            payroll_entry_service: &payroll_entry_service,
+            payroll_entry_repository: &payroll_entry_repository,
+            salary_slip_service: &salary_slip_service,
+            salary_slip_repository: &salary_slip_repository,
+            salary_slip_line_service: &salary_slip_line_service,
+            salary_slip_line_repository: &salary_slip_line_repository,
+            salary_structure_service: &salary_structure_service,
+            salary_structure_repository: &salary_structure_repository,
+            salary_component_service: &salary_component_service,
+            salary_component_repository: &salary_component_repository,
+        })?;
 
         Ok(PayrollModule {
             compensation_change_service,
@@ -251,8 +277,8 @@ impl PayrollModuleBuilder {
             salary_slip_line_service,
             salary_structure_service,
             salary_component_service,
+            ext,
             // <<< CUSTOM
-            payroll_write_service,
             // END CUSTOM
         })
     }
@@ -263,3 +289,6 @@ impl Default for PayrollModuleBuilder {
         Self::new()
     }
 }
+
+// This directory's extension (hand-written; ADR-0031).
+include!("mod.ext.rs");
