@@ -1,0 +1,176 @@
+# =============================================================================
+# Payroll's business rules, each with the hand-written function or database object that
+# enforces it (enforced_by), which `metaphor schema rules` verifies against the sources.
+#
+# A rule names the verb it holds on (`when`). The run, slip and structure verbs are hand-written
+# in src/application/service/payroll_write_service.rs and pay_schedule.rs; the arithmetic is
+# backed by named CHECK constraints. Each id is the label of the test that proves it, where one
+# exists; an id no test mentions is counted by the rule ratchet.
+#
+# Not declared here: one run per period. The module carries no unique index on the period since
+# tenancy left the module APIs (20260911100000_strip_tenancy); the composing service's tenancy
+# decorator owns that uniqueness, and tests/integrity_probes.rs (PIP-6) asserts it.
+# =============================================================================
+
+module: payroll
+
+rules:
+  # ── The run lifecycle (PayrollEntry: draft → processed → posted; draft or processed → cancelled)
+  - id: PIP-5
+    name: process_from_draft_only
+    entity: PayrollEntry
+    when: process
+    assert: "a run is processed only from draft, and only once"
+    error_code: invalid_state
+    enforced_by: "src/application/service/payroll_write_service.rs::process_payroll_entry, src/infrastructure/persistence/payroll_entry_repository.rs::mark_processed"
+
+  - id: PIP-4
+    name: process_needs_a_slip
+    entity: PayrollEntry
+    when: process
+    assert: "a run with no salary slip cannot be processed"
+    error_code: invalid_state
+    enforced_by: "src/application/service/payroll_write_service.rs::process_payroll_entry"
+
+  - id: PIP-3
+    name: post_from_processed_only
+    entity: PayrollEntry
+    when: post
+    assert: "a run is posted only from processed; posting a posted run again publishes nothing new and is not an error"
+    error_code: invalid_state
+    enforced_by: "src/application/service/payroll_write_service.rs::post_payroll_entry, src/infrastructure/persistence/payroll_entry_repository.rs::mark_posted"
+
+  - id: PGSEAM-1
+    name: salary_journal_balances
+    entity: PayrollEntry
+    when: post
+    assert: "the salary journal a run posts balances, debits against credits"
+    error_code: unbalanced
+    enforced_by: "src/application/service/payroll_write_service.rs::post_payroll_entry"
+
+  - id: PAY-CANCEL
+    name: cancel_draft_or_processed_only
+    entity: PayrollEntry
+    when: cancel
+    assert: "only a draft or processed run can be cancelled; a posted run cannot"
+    error_code: invalid_state
+    enforced_by: "src/application/service/payroll_write_service.rs::cancel_payroll_entry"
+
+  - id: PIP-8
+    name: remit_posted_only
+    entity: PayrollEntry
+    when: remit
+    assert: "only a posted run is remitted"
+    error_code: invalid_state
+    enforced_by: "src/application/service/payroll_write_service.rs::remit_payroll_entry"
+
+  - id: PAY-PERIOD
+    name: period_bounds
+    entity: PayrollEntry
+    when: create_run
+    assert: "a run's period_month is 1..12, and a non-calendar period has both bounds with start on or before end"
+    error_code: invalid
+    enforced_by: "src/application/service/payroll_write_service.rs::create_payroll_entry, migrations/20260920180000_run_period_bounds.up.sql::payroll_entries_bounds_order"
+
+  # ── Slips
+  - id: PIP-2
+    name: one_slip_per_employee_per_run
+    entity: SalarySlip
+    when: add_slip
+    assert: "an employee has at most one slip in a run"
+    error_code: invalid
+    enforced_by: "migrations/20260426220002_create_salary_slip_table.up.sql::idx_salary_slips_payroll_entry_id_employee_id"
+
+  - id: PIP-5-SLIP
+    name: slips_on_a_draft_run_only
+    entity: SalarySlip
+    when: add_slip
+    assert: "a slip is added only to a draft run"
+    error_code: invalid_state
+    enforced_by: "src/application/service/payroll_write_service.rs::add_salary_slip, src/application/service/payroll_write_service.rs::build_computed_slip"
+
+  - id: PGC-1
+    name: net_is_gross_less_deductions
+    entity: SalarySlip
+    when: price_slip
+    assert: "net pay is gross pay less total deductions"
+    error_code: invalid
+    enforced_by: "src/application/service/payroll_write_service.rs::price_slip, migrations/20260708000100_payroll_balance_guards.up.sql::salary_slips_net_identity"
+
+  - id: PIP-1
+    name: net_not_negative
+    entity: SalarySlip
+    when: price_slip
+    assert: "net pay cannot be negative: deductions never exceed gross"
+    error_code: invalid
+    enforced_by: "src/application/service/payroll_write_service.rs::price_slip, migrations/20260708000100_payroll_balance_guards.up.sql::salary_slips_net_non_negative"
+
+  - id: PIP-7
+    name: unpaid_days_within_working_days
+    entity: SalarySlip
+    when: price_slip
+    assert: "working days are positive and unpaid days lie between zero and the working days"
+    error_code: invalid
+    enforced_by: "src/application/service/payroll_write_service.rs::price_slip, migrations/20260708000100_payroll_balance_guards.up.sql::salary_slips_unpaid_within_working"
+
+  - id: PAY-AMOUNTS
+    name: slip_amounts_not_negative
+    entity: SalarySlip
+    when: price_slip
+    assert: "gross pay, deductions and every slip line amount are non-negative"
+    error_code: invalid
+    enforced_by: "migrations/20260708000100_payroll_balance_guards.up.sql::salary_slips_gross_non_negative, migrations/20260708000100_payroll_balance_guards.up.sql::salary_slips_deductions_non_negative, migrations/20260708000100_payroll_balance_guards.up.sql::salary_slip_lines_amount_non_negative"
+
+  - id: PGC-2
+    name: money_rounds_half_away_from_zero
+    entity: SalarySlipLine
+    when: price_slip
+    assert: "each prorated line is rounded to 2 places, half away from zero, before the slip sums it"
+    enforced_by: "src/application/service/payroll_write_service.rs::money"
+
+  # ── Structures and their dated changes (SalaryComponent / SalaryComponentVersion)
+  - id: PAY-STRUCTURE
+    name: structure_needs_components
+    entity: SalaryStructure
+    when: create_structure
+    assert: "a structure has a name and at least one component, each with a non-negative amount"
+    error_code: invalid
+    enforced_by: "src/application/service/payroll_write_service.rs::create_structure, migrations/20260708000100_payroll_balance_guards.up.sql::salary_components_amount_non_negative"
+
+  - id: PAY-CHANGE-RUNS
+    name: change_cannot_reach_a_closed_run
+    entity: SalaryComponentVersion
+    when: plan_change
+    assert: "a structure change cannot reach a run that is processed or posted: any non-cancelled run whose period starts on or after the change's date and holds a slip on the structure"
+    error_code: invalid
+    enforced_by: "src/application/service/pay_schedule.rs::plan_change, src/infrastructure/persistence/pay_schedule_repository.rs::runs_reached"
+
+  - id: PAY-CHANGE-WITHDRAW
+    name: only_a_future_change_is_withdrawn
+    entity: SalaryComponentVersion
+    when: withdraw_change
+    assert: "only a change still to come (its date after today, UTC) can be withdrawn"
+    error_code: invalid
+    enforced_by: "src/application/service/pay_schedule.rs::withdraw_change"
+
+  - id: PAY-CHANGE-ONE-PER-DATE
+    name: one_version_per_component_and_date
+    entity: SalaryComponentVersion
+    when: plan_change
+    assert: "a component has one version per date: planning the same date again replaces that component's version"
+    enforced_by: "migrations/20260927110004_create_salary_component_version_table.up.sql::idx_salary_component_versions_component_id_effective_from, src/infrastructure/persistence/pay_schedule_repository.rs::upsert_version"
+
+  - id: PAY-CHANGE-AS-OF
+    name: run_reads_components_as_of_its_period
+    entity: SalaryComponentVersion
+    when: price_slip
+    assert: "a run reads each component as of its period's first day, the latest version on or before it; a versioned item is not paid before its first version or from a removed one"
+    enforced_by: "src/infrastructure/persistence/salary_component_repository.rs::list_by_structure"
+
+  - id: PAY-CHANGE-ITEMS
+    name: change_items_are_well_formed
+    entity: SalaryComponentVersion
+    when: plan_change
+    assert: "an item's name is 1..140 characters, its amount non-negative, its type an earning or a deduction; only an existing item can be removed; the reason is at most 500 characters"
+    error_code: invalid
+    enforced_by: "src/application/service/pay_schedule.rs::check_item, src/application/service/pay_schedule.rs::plan_change"

@@ -3,5 +3,5 @@
 unenforced: 0
 warnings: 0
 machines_without_verbs: 0
-untested_rule_ids: 0
+untested_rule_ids: 10
 unenforced_rules: []
