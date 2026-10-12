@@ -50,6 +50,9 @@ pub use application::service::SalaryStructureService;
 pub use application::service::SalaryComponentService;
 pub use application::service::SalaryComponentVersionService;
 
+// Re-exports - Validation
+pub use application::validator::{ValidationError, ValidationResult};
+
 use std::sync::Arc;
 use axum::Router;
 use sqlx::PgPool;
