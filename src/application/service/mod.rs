@@ -23,6 +23,13 @@ pub use salary_slip_line_service::SalarySlipLineService;
 pub use salary_structure_service::SalaryStructureService;
 pub use salary_component_service::SalaryComponentService;
 pub use salary_component_version_service::SalaryComponentVersionService;
+pub use compensation_change_service::CompensationChangeRowRules;
+pub use payroll_entry_service::PayrollEntryRowRules;
+pub use salary_slip_service::SalarySlipRowRules;
+pub use salary_slip_line_service::SalarySlipLineRowRules;
+pub use salary_structure_service::SalaryStructureRowRules;
+pub use salary_component_service::SalaryComponentRowRules;
+pub use salary_component_version_service::SalaryComponentVersionRowRules;
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

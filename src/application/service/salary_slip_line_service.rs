@@ -32,3 +32,57 @@ pub type SalarySlipLineService = GenericCrudService<
     SalarySlipLineRepository,
 >;
 
+/// The rules the schema declares for SalarySlipLine, checked against the row a create or update
+/// would store. The generated build attaches it to [`SalarySlipLineService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
+pub struct SalarySlipLineRowRules;
+
+#[async_trait::async_trait]
+impl backbone_core::write_guard::WriteGuard<SalarySlipLine> for SalarySlipLineRowRules {
+    async fn check(
+        &self,
+        ctx: &backbone_core::write_guard::WriteCtx<'_, SalarySlipLine>,
+    ) -> backbone_core::write_guard::GuardOutcome {
+        use backbone_core::row_rule as r;
+        use backbone_core::violation::Violation;
+        use backbone_core::write_guard::{GuardOutcome, WriteKind};
+        let (create, update) = (ctx.kind == WriteKind::Create, ctx.kind == WriteKind::Update);
+        let Some(after) = ctx.after.filter(|_| create || update) else {
+            return GuardOutcome::allow();
+        };
+        let Ok(row) = serde_json::to_value(after) else {
+            return GuardOutcome::allow();
+        };
+        let row = &row;
+        let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
+        let mut shadow = Vec::new();
+        let mut refuse = Vec::new();
+        // `salary_slip_id_required` (@required on SalarySlipLine.salary_slip_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["salary_slip_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "salary_slip_id")), r::not(r::is_empty(r::trim(r::field(row, "salary_slip_id")))))) {
+            refuse.push(Violation::new("salary_slip_id", "required", "salary_slip_id is required"));
+        }
+        // `name_required` (@required on SalarySlipLine.name)
+        if (create || (update && r::changed(old.as_ref(), row, &["name"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "name")), r::not(r::is_empty(r::trim(r::field(row, "name")))))) {
+            refuse.push(Violation::new("name", "required", "name is required"));
+        }
+        // `name_max_length` (@max(140) on SalarySlipLine.name)
+        if (create || (update && r::changed(old.as_ref(), row, &["name"]))) && !r::holds(&r::le(r::length(r::field(row, "name")), r::Val::Num(140.0_f64))) {
+            shadow.push(Violation::new("name", "max_length", "name must be at most 140 characters").with_param("max", 140_i64));
+        }
+        // `amount_non_negative` (@non_negative on SalarySlipLine.amount)
+        if (create || (update && r::changed(old.as_ref(), row, &["amount"]))) && !r::holds(&r::ge(r::field(row, "amount"), r::Val::Num(0.0_f64))) {
+            shadow.push(Violation::new("amount", "non_negative", "amount must not be negative"));
+        }
+        // `gl_account_id_required` (@required on SalarySlipLine.gl_account_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["gl_account_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "gl_account_id")), r::not(r::is_empty(r::trim(r::field(row, "gl_account_id")))))) {
+            refuse.push(Violation::new("gl_account_id", "required", "gl_account_id is required"));
+        }
+        // `source_kind_max_length` (@max(60) on SalarySlipLine.source_kind)
+        if (create || (update && r::changed(old.as_ref(), row, &["source_kind"]))) && !r::holds(&r::le(r::length(r::field(row, "source_kind")), r::Val::Num(60.0_f64))) {
+            shadow.push(Violation::new("source_kind", "max_length", "source_kind must be at most 60 characters").with_param("max", 60_i64));
+        }
+        GuardOutcome { refuse, shadow }
+    }
+}
+

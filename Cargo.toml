@@ -20,7 +20,7 @@ path = "src/lib.rs"
 # or `rev = "<commit-sha>"`. Cargo dedupes the git fetch — the repo is only
 # cloned once even though four crates reference it.
 # -----------------------------------------------------------------------------
-backbone-core = { version = "3.0.0", features = ["postgres"] }
+backbone-core = { version = "3.7.0", features = ["postgres"] }
 backbone-orm = { version = "3.0.0" }
 # `axum` feature required for the CompanyContext extractor the guarded routes use; without it
 # the `company` module isn't exported and lib-only builds (clippy/check without dev-deps'
