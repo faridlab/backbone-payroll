@@ -56,20 +56,21 @@ impl backbone_core::write_guard::WriteGuard<PayrollEntry> for PayrollEntryRowRul
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
+        let mut refuse = Vec::new();
         // `total_gross_non_negative` (@non_negative on PayrollEntry.total_gross)
         if (create || (update && r::changed(old.as_ref(), row, &["total_gross"]))) && !r::holds(&r::ge(r::field(row, "total_gross"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("total_gross", "non_negative", "total_gross must not be negative"));
+            refuse.push(Violation::new("total_gross", "non_negative", "total_gross must not be negative"));
         }
         // `total_deductions_non_negative` (@non_negative on PayrollEntry.total_deductions)
         if (create || (update && r::changed(old.as_ref(), row, &["total_deductions"]))) && !r::holds(&r::ge(r::field(row, "total_deductions"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("total_deductions", "non_negative", "total_deductions must not be negative"));
+            refuse.push(Violation::new("total_deductions", "non_negative", "total_deductions must not be negative"));
         }
         // `total_net_non_negative` (@non_negative on PayrollEntry.total_net)
         if (create || (update && r::changed(old.as_ref(), row, &["total_net"]))) && !r::holds(&r::ge(r::field(row, "total_net"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("total_net", "non_negative", "total_net must not be negative"));
+            refuse.push(Violation::new("total_net", "non_negative", "total_net must not be negative"));
         }
-        GuardOutcome { refuse: Vec::new(), shadow }
+        GuardOutcome { refuse, shadow }
     }
 }
 

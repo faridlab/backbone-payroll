@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<SalarySlip> for SalarySlipRowRules {
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `payroll_entry_id_required` (@required on SalarySlip.payroll_entry_id)
         if (create || (update && r::changed(old.as_ref(), row, &["payroll_entry_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "payroll_entry_id")), r::not(r::is_empty(r::trim(r::field(row, "payroll_entry_id")))))) {
@@ -68,31 +68,31 @@ impl backbone_core::write_guard::WriteGuard<SalarySlip> for SalarySlipRowRules {
         }
         // `working_days_non_negative` (@non_negative on SalarySlip.working_days)
         if (create || (update && r::changed(old.as_ref(), row, &["working_days"]))) && !r::holds(&r::ge(r::field(row, "working_days"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("working_days", "non_negative", "working_days must not be negative"));
+            refuse.push(Violation::new("working_days", "non_negative", "working_days must not be negative"));
         }
         // `unpaid_days_non_negative` (@non_negative on SalarySlip.unpaid_days)
         if (create || (update && r::changed(old.as_ref(), row, &["unpaid_days"]))) && !r::holds(&r::ge(r::field(row, "unpaid_days"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("unpaid_days", "non_negative", "unpaid_days must not be negative"));
+            refuse.push(Violation::new("unpaid_days", "non_negative", "unpaid_days must not be negative"));
         }
         // `gross_pay_non_negative` (@non_negative on SalarySlip.gross_pay)
         if (create || (update && r::changed(old.as_ref(), row, &["gross_pay"]))) && !r::holds(&r::ge(r::field(row, "gross_pay"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("gross_pay", "non_negative", "gross_pay must not be negative"));
+            refuse.push(Violation::new("gross_pay", "non_negative", "gross_pay must not be negative"));
         }
         // `total_deductions_non_negative` (@non_negative on SalarySlip.total_deductions)
         if (create || (update && r::changed(old.as_ref(), row, &["total_deductions"]))) && !r::holds(&r::ge(r::field(row, "total_deductions"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("total_deductions", "non_negative", "total_deductions must not be negative"));
+            refuse.push(Violation::new("total_deductions", "non_negative", "total_deductions must not be negative"));
         }
         // `net_pay_non_negative` (@non_negative on SalarySlip.net_pay)
         if (create || (update && r::changed(old.as_ref(), row, &["net_pay"]))) && !r::holds(&r::ge(r::field(row, "net_pay"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("net_pay", "non_negative", "net_pay must not be negative"));
+            refuse.push(Violation::new("net_pay", "non_negative", "net_pay must not be negative"));
         }
         // `overtime_hours_non_negative` (@non_negative on SalarySlip.overtime_hours)
         if (create || (update && r::changed(old.as_ref(), row, &["overtime_hours"]))) && !r::holds(&r::ge(r::field(row, "overtime_hours"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("overtime_hours", "non_negative", "overtime_hours must not be negative"));
+            refuse.push(Violation::new("overtime_hours", "non_negative", "overtime_hours must not be negative"));
         }
         // `tax_method_max_length` (@max(20) on SalarySlip.tax_method)
         if (create || (update && r::changed(old.as_ref(), row, &["tax_method"]))) && !r::holds(&r::le(r::length(r::field(row, "tax_method")), r::Val::Num(20.0_f64))) {
-            shadow.push(Violation::new("tax_method", "max_length", "tax_method must be at most 20 characters").with_param("max", 20_i64));
+            refuse.push(Violation::new("tax_method", "max_length", "tax_method must be at most 20 characters").with_param("max", 20_i64));
         }
         GuardOutcome { refuse, shadow }
     }

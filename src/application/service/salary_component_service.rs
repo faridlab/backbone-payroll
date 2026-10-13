@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<SalaryComponent> for SalaryComponent
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `structure_id_required` (@required on SalaryComponent.structure_id)
         if (create || (update && r::changed(old.as_ref(), row, &["structure_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "structure_id")), r::not(r::is_empty(r::trim(r::field(row, "structure_id")))))) {
@@ -68,11 +68,11 @@ impl backbone_core::write_guard::WriteGuard<SalaryComponent> for SalaryComponent
         }
         // `name_max_length` (@max(140) on SalaryComponent.name)
         if (create || (update && r::changed(old.as_ref(), row, &["name"]))) && !r::holds(&r::le(r::length(r::field(row, "name")), r::Val::Num(140.0_f64))) {
-            shadow.push(Violation::new("name", "max_length", "name must be at most 140 characters").with_param("max", 140_i64));
+            refuse.push(Violation::new("name", "max_length", "name must be at most 140 characters").with_param("max", 140_i64));
         }
         // `amount_non_negative` (@non_negative on SalaryComponent.amount)
         if (create || (update && r::changed(old.as_ref(), row, &["amount"]))) && !r::holds(&r::ge(r::field(row, "amount"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("amount", "non_negative", "amount must not be negative"));
+            refuse.push(Violation::new("amount", "non_negative", "amount must not be negative"));
         }
         // `gl_account_id_required` (@required on SalaryComponent.gl_account_id)
         if (create || (update && r::changed(old.as_ref(), row, &["gl_account_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "gl_account_id")), r::not(r::is_empty(r::trim(r::field(row, "gl_account_id")))))) {

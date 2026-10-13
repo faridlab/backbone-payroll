@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<SalaryComponentVersion> for SalaryCo
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `component_id_required` (@required on SalaryComponentVersion.component_id)
         if (create || (update && r::changed(old.as_ref(), row, &["component_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "component_id")), r::not(r::is_empty(r::trim(r::field(row, "component_id")))))) {
@@ -68,11 +68,11 @@ impl backbone_core::write_guard::WriteGuard<SalaryComponentVersion> for SalaryCo
         }
         // `name_max_length` (@max(140) on SalaryComponentVersion.name)
         if (create || (update && r::changed(old.as_ref(), row, &["name"]))) && !r::holds(&r::le(r::length(r::field(row, "name")), r::Val::Num(140.0_f64))) {
-            shadow.push(Violation::new("name", "max_length", "name must be at most 140 characters").with_param("max", 140_i64));
+            refuse.push(Violation::new("name", "max_length", "name must be at most 140 characters").with_param("max", 140_i64));
         }
         // `amount_non_negative` (@non_negative on SalaryComponentVersion.amount)
         if (create || (update && r::changed(old.as_ref(), row, &["amount"]))) && !r::holds(&r::ge(r::field(row, "amount"), r::Val::Num(0.0_f64))) {
-            shadow.push(Violation::new("amount", "non_negative", "amount must not be negative"));
+            refuse.push(Violation::new("amount", "non_negative", "amount must not be negative"));
         }
         // `gl_account_id_required` (@required on SalaryComponentVersion.gl_account_id)
         if (create || (update && r::changed(old.as_ref(), row, &["gl_account_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "gl_account_id")), r::not(r::is_empty(r::trim(r::field(row, "gl_account_id")))))) {
@@ -80,7 +80,7 @@ impl backbone_core::write_guard::WriteGuard<SalaryComponentVersion> for SalaryCo
         }
         // `reason_max_length` (@max(500) on SalaryComponentVersion.reason)
         if (create || (update && r::changed(old.as_ref(), row, &["reason"]))) && !r::holds(&r::le(r::length(r::field(row, "reason")), r::Val::Num(500.0_f64))) {
-            shadow.push(Violation::new("reason", "max_length", "reason must be at most 500 characters").with_param("max", 500_i64));
+            refuse.push(Violation::new("reason", "max_length", "reason must be at most 500 characters").with_param("max", 500_i64));
         }
         GuardOutcome { refuse, shadow }
     }
