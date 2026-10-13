@@ -259,6 +259,9 @@ impl backbone_orm::EntityRepoMeta for SalarySlip {
     fn search_fields() -> &'static [&'static str] {
         &[]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("payrollEntry", "payroll_entries", "payrollEntryId")]
+    }
 }
 
 /// Builder for SalarySlip entity

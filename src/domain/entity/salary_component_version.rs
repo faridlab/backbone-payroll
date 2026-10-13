@@ -245,6 +245,9 @@ impl backbone_orm::EntityRepoMeta for SalaryComponentVersion {
     fn search_fields() -> &'static [&'static str] {
         &["name"]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("component", "salary_components", "componentId")]
+    }
 }
 
 /// Builder for SalaryComponentVersion entity
