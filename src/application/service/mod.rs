@@ -31,5 +31,61 @@ pub use salary_structure_service::SalaryStructureRowRules;
 pub use salary_component_service::SalaryComponentRowRules;
 pub use salary_component_version_service::SalaryComponentVersionRowRules;
 
+/// A `CompensationChangeService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_compensation_change_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::CompensationChangeRepository>,
+) -> CompensationChangeService {
+    CompensationChangeService::with_repository(repository).with_guard(std::sync::Arc::new(CompensationChangeRowRules))
+}
+
+/// A `PayrollEntryService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_payroll_entry_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::PayrollEntryRepository>,
+) -> PayrollEntryService {
+    PayrollEntryService::with_repository(repository).with_guard(std::sync::Arc::new(PayrollEntryRowRules))
+}
+
+/// A `SalarySlipService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_salary_slip_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::SalarySlipRepository>,
+) -> SalarySlipService {
+    SalarySlipService::with_repository(repository).with_guard(std::sync::Arc::new(SalarySlipRowRules))
+}
+
+/// A `SalarySlipLineService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_salary_slip_line_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::SalarySlipLineRepository>,
+) -> SalarySlipLineService {
+    SalarySlipLineService::with_repository(repository).with_guard(std::sync::Arc::new(SalarySlipLineRowRules))
+}
+
+/// A `SalaryStructureService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_salary_structure_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::SalaryStructureRepository>,
+) -> SalaryStructureService {
+    SalaryStructureService::with_repository(repository).with_guard(std::sync::Arc::new(SalaryStructureRowRules))
+}
+
+/// A `SalaryComponentService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_salary_component_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::SalaryComponentRepository>,
+) -> SalaryComponentService {
+    SalaryComponentService::with_repository(repository).with_guard(std::sync::Arc::new(SalaryComponentRowRules))
+}
+
+/// A `SalaryComponentVersionService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_salary_component_version_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::SalaryComponentVersionRepository>,
+) -> SalaryComponentVersionService {
+    SalaryComponentVersionService::with_repository(repository).with_guard(std::sync::Arc::new(SalaryComponentVersionRowRules))
+}
+
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

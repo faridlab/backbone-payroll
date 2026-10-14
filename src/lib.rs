@@ -224,31 +224,31 @@ impl PayrollModuleBuilder {
 
         // CompensationChange service
         let compensation_change_repository = Arc::new(CompensationChangeRepository::new(db_pool.clone()));
-        let compensation_change_service = Arc::new(CompensationChangeService::with_repository(compensation_change_repository.clone()).with_guard(Arc::new(crate::application::service::CompensationChangeRowRules)));
+        let compensation_change_service = Arc::new(crate::application::service::build_compensation_change_service(compensation_change_repository.clone()));
 
         // PayrollEntry service
         let payroll_entry_repository = Arc::new(PayrollEntryRepository::new(db_pool.clone()));
-        let payroll_entry_service = Arc::new(PayrollEntryService::with_repository(payroll_entry_repository.clone()).with_guard(Arc::new(crate::application::service::PayrollEntryRowRules)));
+        let payroll_entry_service = Arc::new(crate::application::service::build_payroll_entry_service(payroll_entry_repository.clone()));
 
         // SalarySlip service
         let salary_slip_repository = Arc::new(SalarySlipRepository::new(db_pool.clone()));
-        let salary_slip_service = Arc::new(SalarySlipService::with_repository(salary_slip_repository.clone()).with_guard(Arc::new(crate::application::service::SalarySlipRowRules)));
+        let salary_slip_service = Arc::new(crate::application::service::build_salary_slip_service(salary_slip_repository.clone()));
 
         // SalarySlipLine service
         let salary_slip_line_repository = Arc::new(SalarySlipLineRepository::new(db_pool.clone()));
-        let salary_slip_line_service = Arc::new(SalarySlipLineService::with_repository(salary_slip_line_repository.clone()).with_guard(Arc::new(crate::application::service::SalarySlipLineRowRules)));
+        let salary_slip_line_service = Arc::new(crate::application::service::build_salary_slip_line_service(salary_slip_line_repository.clone()));
 
         // SalaryStructure service
         let salary_structure_repository = Arc::new(SalaryStructureRepository::new(db_pool.clone()));
-        let salary_structure_service = Arc::new(SalaryStructureService::with_repository(salary_structure_repository.clone()).with_guard(Arc::new(crate::application::service::SalaryStructureRowRules)));
+        let salary_structure_service = Arc::new(crate::application::service::build_salary_structure_service(salary_structure_repository.clone()));
 
         // SalaryComponent service
         let salary_component_repository = Arc::new(SalaryComponentRepository::new(db_pool.clone()));
-        let salary_component_service = Arc::new(SalaryComponentService::with_repository(salary_component_repository.clone()).with_guard(Arc::new(crate::application::service::SalaryComponentRowRules)));
+        let salary_component_service = Arc::new(crate::application::service::build_salary_component_service(salary_component_repository.clone()));
 
         // SalaryComponentVersion service
         let salary_component_version_repository = Arc::new(SalaryComponentVersionRepository::new(db_pool.clone()));
-        let salary_component_version_service = Arc::new(SalaryComponentVersionService::with_repository(salary_component_version_repository.clone()).with_guard(Arc::new(crate::application::service::SalaryComponentVersionRowRules)));
+        let salary_component_version_service = Arc::new(crate::application::service::build_salary_component_version_service(salary_component_version_repository.clone()));
 
 
         // The extension builds its own state from what the generated build made.
