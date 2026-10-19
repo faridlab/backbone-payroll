@@ -38,19 +38,25 @@ pub struct CreateSalaryComponentVersionDto {
     pub effective_from: NaiveDate,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
-    #[serde(alias = "component_type")]
+    #[serde(default = "default_create_salary_component_version_component_type", alias = "component_type")]
     pub component_type: ComponentType,
+    #[serde(default)]
     pub amount: Decimal,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "gl_account_id")]
     pub gl_account_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_statutory")]
+    #[serde(default, alias = "is_statutory")]
     pub is_statutory: bool,
     #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(default)]
     pub removed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+}
+
+fn default_create_salary_component_version_component_type() -> ComponentType {
+    ComponentType::Earning
 }
 
 // =============================================================================
@@ -122,8 +128,8 @@ pub struct PatchSalaryComponentVersionDto {
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub removed: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub reason: Option<Option<String>>,
 }
 
 impl PatchSalaryComponentVersionDto {
@@ -316,12 +322,4 @@ impl backbone_core::ApplyUpdateDto<UpdateSalaryComponentVersionDto> for SalaryCo
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to SalaryComponentVersion here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

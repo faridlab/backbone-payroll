@@ -89,14 +89,14 @@ pub struct PatchCompensationChangeDto {
     pub employee_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "change_type")]
     pub change_type: Option<CompensationChangeType>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "new_amount")]
-    pub new_amount: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "effective_date")]
-    pub effective_date: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "reference_id")]
-    pub reference_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub note: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "new_amount")]
+    pub new_amount: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "effective_date")]
+    pub effective_date: Option<Option<NaiveDate>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "reference_id")]
+    pub reference_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub note: Option<Option<String>>,
 }
 
 impl PatchCompensationChangeDto {
@@ -269,12 +269,4 @@ impl backbone_core::ApplyUpdateDto<UpdateCompensationChangeDto> for Compensation
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to CompensationChange here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

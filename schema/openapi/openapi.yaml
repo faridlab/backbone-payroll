@@ -49,30 +49,6 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-    post:
-      tags:
-        - CompensationChanges
-      summary: Create CompensationChange
-      description: Create a new CompensationChange
-      operationId: createCompensationChange
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateCompensationChangeRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompensationChange'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /api/v1/payroll/compensation_changes/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
@@ -92,181 +68,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-    put:
-      tags:
-        - CompensationChanges
-      summary: Update CompensationChange (full)
-      operationId: updateCompensationChange
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateCompensationChangeRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompensationChange'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    patch:
-      tags:
-        - CompensationChanges
-      summary: Update CompensationChange (partial)
-      operationId: patchCompensationChange
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchCompensationChangeRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompensationChange'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      tags:
-        - CompensationChanges
-      summary: Delete CompensationChange (soft)
-      operationId: deleteCompensationChange
-      responses:
-        '204':
-          description: Deleted
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/payroll/compensation_changes/bulk:
-    post:
-      tags:
-        - CompensationChanges
-      summary: Bulk create CompensationChanges
-      operationId: bulkCreateCompensationChanges
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/CreateCompensationChangeRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/CompensationChange'
-    put:
-      tags:
-        - CompensationChanges
-      summary: Bulk update CompensationChanges (full, atomic)
-      operationId: bulkUpdateCompensationChanges
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                allOf:
-                  - type: object
-                    required: [id]
-                    properties:
-                      id:
-                        type: string
-                  - $ref: '#/components/schemas/UpdateCompensationChangeRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompensationChangeBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-    patch:
-      tags:
-        - CompensationChanges
-      summary: Bulk partial-update CompensationChanges (atomic)
-      operationId: bulkPatchCompensationChanges
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: object
-                  required: [ids, patch]
-                  properties:
-                    ids:
-                      type: array
-                      items: { type: string }
-                    patch:
-                      type: object
-                      additionalProperties: true
-                - type: object
-                  required: [items]
-                  properties:
-                    items:
-                      type: array
-                      items:
-                        type: object
-                        required: [id, patch]
-                        properties:
-                          id: { type: string }
-                          patch: { type: object, additionalProperties: true }
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompensationChangeBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/payroll/compensation_changes/upsert:
-    post:
-      tags:
-        - CompensationChanges
-      summary: Upsert CompensationChange
-      operationId: upsertCompensationChange
-      parameters:
-        - name: key_field
-          in: query
-          schema:
-            type: string
-        - name: key_value
-          in: query
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateCompensationChangeRequest'
-      responses:
-        '200':
-          description: Upserted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompensationChange'
-
   /api/v1/payroll/compensation_changes/trash:
     get:
       tags:
@@ -283,115 +84,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompensationChangeList'
-
-  /api/v1/payroll/compensation_changes/{id}/restore:
-    parameters:
-      - $ref: '#/components/parameters/IdParam'
-    post:
-      tags:
-        - CompensationChanges
-      summary: Restore deleted CompensationChange
-      operationId: restoreCompensationChange
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompensationChange'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/payroll/compensation_changes/empty:
-    delete:
-      tags:
-        - CompensationChanges
-      summary: Empty trash for CompensationChanges
-      operationId: emptyTrashCompensationChanges
-      responses:
-        '200':
-          description: Trash emptied
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deleted_count:
-                    type: integer
-
-  /api/v1/payroll/compensation_changes/delete/bulk:
-    post:
-      tags:
-        - CompensationChanges
-      summary: Bulk soft-delete CompensationChanges by ids (atomic)
-      operationId: bulkDeleteCompensationChanges
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Soft-deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  soft_deleted: { type: integer }
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/payroll/compensation_changes/restore/bulk:
-    post:
-      tags:
-        - CompensationChanges
-      summary: Bulk restore CompensationChanges by ids (atomic)
-      operationId: bulkRestoreCompensationChanges
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompensationChangeBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/payroll/compensation_changes/restore/all:
-    post:
-      tags:
-        - CompensationChanges
-      summary: Restore all soft-deleted CompensationChanges
-      operationId: restoreAllCompensationChanges
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  restored: { type: integer }
-
-  /api/v1/payroll/compensation_changes/trash/bulk:
-    delete:
-      tags:
-        - CompensationChanges
-      summary: Bulk permanently-delete CompensationChanges from trash by ids (atomic)
-      operationId: bulkPermanentDeleteCompensationChanges
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Permanently deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  permanently_deleted: { type: integer }
-        '400':
-          $ref: '#/components/responses/BadRequest'
 
   /api/v1/payroll/payroll_entries:
     get:
@@ -2245,30 +1937,6 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-    post:
-      tags:
-        - SalaryComponentVersions
-      summary: Create SalaryComponentVersion
-      description: Create a new SalaryComponentVersion
-      operationId: createSalaryComponentVersion
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateSalaryComponentVersionRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalaryComponentVersion'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /api/v1/payroll/salary_component_versions/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
@@ -2288,181 +1956,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-    put:
-      tags:
-        - SalaryComponentVersions
-      summary: Update SalaryComponentVersion (full)
-      operationId: updateSalaryComponentVersion
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateSalaryComponentVersionRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalaryComponentVersion'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    patch:
-      tags:
-        - SalaryComponentVersions
-      summary: Update SalaryComponentVersion (partial)
-      operationId: patchSalaryComponentVersion
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchSalaryComponentVersionRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalaryComponentVersion'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      tags:
-        - SalaryComponentVersions
-      summary: Delete SalaryComponentVersion (soft)
-      operationId: deleteSalaryComponentVersion
-      responses:
-        '204':
-          description: Deleted
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/payroll/salary_component_versions/bulk:
-    post:
-      tags:
-        - SalaryComponentVersions
-      summary: Bulk create SalaryComponentVersions
-      operationId: bulkCreateSalaryComponentVersions
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/CreateSalaryComponentVersionRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SalaryComponentVersion'
-    put:
-      tags:
-        - SalaryComponentVersions
-      summary: Bulk update SalaryComponentVersions (full, atomic)
-      operationId: bulkUpdateSalaryComponentVersions
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                allOf:
-                  - type: object
-                    required: [id]
-                    properties:
-                      id:
-                        type: string
-                  - $ref: '#/components/schemas/UpdateSalaryComponentVersionRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalaryComponentVersionBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-    patch:
-      tags:
-        - SalaryComponentVersions
-      summary: Bulk partial-update SalaryComponentVersions (atomic)
-      operationId: bulkPatchSalaryComponentVersions
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: object
-                  required: [ids, patch]
-                  properties:
-                    ids:
-                      type: array
-                      items: { type: string }
-                    patch:
-                      type: object
-                      additionalProperties: true
-                - type: object
-                  required: [items]
-                  properties:
-                    items:
-                      type: array
-                      items:
-                        type: object
-                        required: [id, patch]
-                        properties:
-                          id: { type: string }
-                          patch: { type: object, additionalProperties: true }
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalaryComponentVersionBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/payroll/salary_component_versions/upsert:
-    post:
-      tags:
-        - SalaryComponentVersions
-      summary: Upsert SalaryComponentVersion
-      operationId: upsertSalaryComponentVersion
-      parameters:
-        - name: key_field
-          in: query
-          schema:
-            type: string
-        - name: key_value
-          in: query
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateSalaryComponentVersionRequest'
-      responses:
-        '200':
-          description: Upserted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalaryComponentVersion'
-
   /api/v1/payroll/salary_component_versions/trash:
     get:
       tags:
@@ -2479,115 +1972,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SalaryComponentVersionList'
-
-  /api/v1/payroll/salary_component_versions/{id}/restore:
-    parameters:
-      - $ref: '#/components/parameters/IdParam'
-    post:
-      tags:
-        - SalaryComponentVersions
-      summary: Restore deleted SalaryComponentVersion
-      operationId: restoreSalaryComponentVersion
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalaryComponentVersion'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/payroll/salary_component_versions/empty:
-    delete:
-      tags:
-        - SalaryComponentVersions
-      summary: Empty trash for SalaryComponentVersions
-      operationId: emptyTrashSalaryComponentVersions
-      responses:
-        '200':
-          description: Trash emptied
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deleted_count:
-                    type: integer
-
-  /api/v1/payroll/salary_component_versions/delete/bulk:
-    post:
-      tags:
-        - SalaryComponentVersions
-      summary: Bulk soft-delete SalaryComponentVersions by ids (atomic)
-      operationId: bulkDeleteSalaryComponentVersions
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Soft-deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  soft_deleted: { type: integer }
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/payroll/salary_component_versions/restore/bulk:
-    post:
-      tags:
-        - SalaryComponentVersions
-      summary: Bulk restore SalaryComponentVersions by ids (atomic)
-      operationId: bulkRestoreSalaryComponentVersions
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SalaryComponentVersionBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/payroll/salary_component_versions/restore/all:
-    post:
-      tags:
-        - SalaryComponentVersions
-      summary: Restore all soft-deleted SalaryComponentVersions
-      operationId: restoreAllSalaryComponentVersions
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  restored: { type: integer }
-
-  /api/v1/payroll/salary_component_versions/trash/bulk:
-    delete:
-      tags:
-        - SalaryComponentVersions
-      summary: Bulk permanently-delete SalaryComponentVersions from trash by ids (atomic)
-      operationId: bulkPermanentDeleteSalaryComponentVersions
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Permanently deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  permanently_deleted: { type: integer }
-        '400':
-          $ref: '#/components/responses/BadRequest'
 
 components:
   schemas:
@@ -2642,7 +2026,6 @@ components:
       required:
         - employee_id
         - change_type
-        - metadata
       properties:
         employee_id:
           type: string
@@ -2663,15 +2046,12 @@ components:
         note:
           nullable: true
           type: string
-        metadata:
-          type: object
 
     UpdateCompensationChangeRequest:
       type: object
       required:
         - employee_id
         - change_type
-        - metadata
       properties:
         employee_id:
           type: string
@@ -2692,8 +2072,6 @@ components:
         note:
           nullable: true
           type: string
-        metadata:
-          type: object
 
     PatchCompensationChangeRequest:
       type: object
@@ -2717,8 +2095,6 @@ components:
         note:
           nullable: true
           type: string
-        metadata:
-          type: object
 
     CompensationChangeList:
       type: object
@@ -2812,11 +2188,6 @@ components:
       required:
         - period_year
         - period_month
-        - status
-        - total_gross
-        - total_deductions
-        - total_net
-        - metadata
       properties:
         period_year:
           type: integer
@@ -2864,8 +2235,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     UpdatePayrollEntryRequest:
       type: object
@@ -2876,7 +2245,6 @@ components:
         - total_gross
         - total_deductions
         - total_net
-        - metadata
       properties:
         period_year:
           type: integer
@@ -2924,8 +2292,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     PatchPayrollEntryRequest:
       type: object
@@ -2976,8 +2342,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     PayrollEntryList:
       type: object
@@ -3053,12 +2417,6 @@ components:
       required:
         - payroll_entry_id
         - employee_id
-        - working_days
-        - unpaid_days
-        - gross_pay
-        - total_deductions
-        - net_pay
-        - metadata
       properties:
         payroll_entry_id:
           type: string
@@ -3087,8 +2445,6 @@ components:
           nullable: true
           type: string
           maxLength: 20
-        metadata:
-          type: object
 
     UpdateSalarySlipRequest:
       type: object
@@ -3100,7 +2456,6 @@ components:
         - gross_pay
         - total_deductions
         - net_pay
-        - metadata
       properties:
         payroll_entry_id:
           type: string
@@ -3129,8 +2484,6 @@ components:
           nullable: true
           type: string
           maxLength: 20
-        metadata:
-          type: object
 
     PatchSalarySlipRequest:
       type: object
@@ -3162,8 +2515,6 @@ components:
           nullable: true
           type: string
           maxLength: 20
-        metadata:
-          type: object
 
     SalarySlipList:
       type: object
@@ -3234,11 +2585,7 @@ components:
       required:
         - salary_slip_id
         - name
-        - component_type
-        - is_statutory
-        - amount
         - gl_account_id
-        - metadata
       properties:
         salary_slip_id:
           type: string
@@ -3263,8 +2610,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     UpdateSalarySlipLineRequest:
       type: object
@@ -3275,7 +2620,6 @@ components:
         - is_statutory
         - amount
         - gl_account_id
-        - metadata
       properties:
         salary_slip_id:
           type: string
@@ -3300,8 +2644,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     PatchSalarySlipLineRequest:
       type: object
@@ -3329,8 +2671,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     SalarySlipLineList:
       type: object
@@ -3378,31 +2718,24 @@ components:
       type: object
       required:
         - name
-        - status
-        - metadata
       properties:
         name:
           type: string
           maxLength: 140
         status:
           type: string
-        metadata:
-          type: object
 
     UpdateSalaryStructureRequest:
       type: object
       required:
         - name
         - status
-        - metadata
       properties:
         name:
           type: string
           maxLength: 140
         status:
           type: string
-        metadata:
-          type: object
 
     PatchSalaryStructureRequest:
       type: object
@@ -3412,8 +2745,6 @@ components:
           maxLength: 140
         status:
           type: string
-        metadata:
-          type: object
 
     SalaryStructureList:
       type: object
@@ -3476,11 +2807,7 @@ components:
       required:
         - structure_id
         - name
-        - component_type
-        - amount
         - gl_account_id
-        - is_statutory
-        - metadata
       properties:
         structure_id:
           type: string
@@ -3497,8 +2824,6 @@ components:
           format: uuid
         is_statutory:
           type: boolean
-        metadata:
-          type: object
 
     UpdateSalaryComponentRequest:
       type: object
@@ -3509,7 +2834,6 @@ components:
         - amount
         - gl_account_id
         - is_statutory
-        - metadata
       properties:
         structure_id:
           type: string
@@ -3526,8 +2850,6 @@ components:
           format: uuid
         is_statutory:
           type: boolean
-        metadata:
-          type: object
 
     PatchSalaryComponentRequest:
       type: object
@@ -3547,8 +2869,6 @@ components:
           format: uuid
         is_statutory:
           type: boolean
-        metadata:
-          type: object
 
     SalaryComponentList:
       type: object
@@ -3623,12 +2943,7 @@ components:
         - component_id
         - effective_from
         - name
-        - component_type
-        - amount
         - gl_account_id
-        - is_statutory
-        - removed
-        - metadata
       properties:
         component_id:
           type: string
@@ -3654,8 +2969,6 @@ components:
           nullable: true
           type: string
           maxLength: 500
-        metadata:
-          type: object
 
     UpdateSalaryComponentVersionRequest:
       type: object
@@ -3668,7 +2981,6 @@ components:
         - gl_account_id
         - is_statutory
         - removed
-        - metadata
       properties:
         component_id:
           type: string
@@ -3694,8 +3006,6 @@ components:
           nullable: true
           type: string
           maxLength: 500
-        metadata:
-          type: object
 
     PatchSalaryComponentVersionRequest:
       type: object
@@ -3724,8 +3034,6 @@ components:
           nullable: true
           type: string
           maxLength: 500
-        metadata:
-          type: object
 
     SalaryComponentVersionList:
       type: object

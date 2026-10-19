@@ -35,11 +35,12 @@ pub struct CreateSalarySlipLineDto {
     pub salary_slip_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
-    #[serde(alias = "component_type")]
+    #[serde(default = "default_create_salary_slip_line_component_type", alias = "component_type")]
     pub component_type: ComponentType,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_statutory")]
+    #[serde(default, alias = "is_statutory")]
     pub is_statutory: bool,
+    #[serde(default)]
     pub amount: Decimal,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "gl_account_id")]
@@ -48,6 +49,10 @@ pub struct CreateSalarySlipLineDto {
     pub source_kind: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "source_ref")]
     pub source_ref: Option<Uuid>,
+}
+
+fn default_create_salary_slip_line_component_type() -> ComponentType {
+    ComponentType::Earning
 }
 
 // =============================================================================
@@ -110,10 +115,10 @@ pub struct PatchSalarySlipLineDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "gl_account_id")]
     pub gl_account_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "source_kind")]
-    pub source_kind: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "source_ref")]
-    pub source_ref: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "source_kind")]
+    pub source_kind: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "source_ref")]
+    pub source_ref: Option<Option<Uuid>>,
 }
 
 impl PatchSalarySlipLineDto {
@@ -299,12 +304,4 @@ impl backbone_core::ApplyUpdateDto<UpdateSalarySlipLineDto> for SalarySlipLine {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to SalarySlipLine here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

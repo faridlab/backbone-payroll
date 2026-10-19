@@ -204,6 +204,12 @@ impl super::Entity for SalaryComponentVersion {
 }
 
 impl backbone_core::PersistentEntity for SalaryComponentVersion {
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("component_id", "payroll.salary_components", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

@@ -37,15 +37,15 @@ pub struct CreateSalarySlipDto {
     pub employee_id: Uuid,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "structure_id")]
     pub structure_id: Option<Uuid>,
-    #[serde(alias = "working_days")]
+    #[serde(default, alias = "working_days")]
     pub working_days: Decimal,
-    #[serde(alias = "unpaid_days")]
+    #[serde(default, alias = "unpaid_days")]
     pub unpaid_days: Decimal,
-    #[serde(alias = "gross_pay")]
+    #[serde(default, alias = "gross_pay")]
     pub gross_pay: Decimal,
-    #[serde(alias = "total_deductions")]
+    #[serde(default, alias = "total_deductions")]
     pub total_deductions: Decimal,
-    #[serde(alias = "net_pay")]
+    #[serde(default, alias = "net_pay")]
     pub net_pay: Decimal,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "overtime_hours")]
     pub overtime_hours: Option<Decimal>,
@@ -107,8 +107,8 @@ pub struct PatchSalarySlipDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "employee_id")]
     pub employee_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "structure_id")]
-    pub structure_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "structure_id")]
+    pub structure_id: Option<Option<Uuid>>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "working_days")]
     pub working_days: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "unpaid_days")]
@@ -119,10 +119,10 @@ pub struct PatchSalarySlipDto {
     pub total_deductions: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "net_pay")]
     pub net_pay: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "overtime_hours")]
-    pub overtime_hours: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "tax_method")]
-    pub tax_method: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "overtime_hours")]
+    pub overtime_hours: Option<Option<Decimal>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "tax_method")]
+    pub tax_method: Option<Option<String>>,
 }
 
 impl PatchSalarySlipDto {
@@ -316,12 +316,4 @@ impl backbone_core::ApplyUpdateDto<UpdateSalarySlipDto> for SalarySlip {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to SalarySlip here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

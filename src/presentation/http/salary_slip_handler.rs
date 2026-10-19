@@ -81,6 +81,13 @@ impl axum::response::IntoResponse for SalarySlipError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `salary_slip:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn salary_slip_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("salary_slip")
+        .in_module("payroll")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for SalarySlip.
 ///
 /// # Routes
@@ -110,21 +117,23 @@ impl axum::response::IntoResponse for SalarySlipError {
 /// let router = create_salary_slip_routes(service);
 /// ```
 pub fn create_salary_slip_routes(service: Arc<SalarySlipService>) -> Router {
-    BackboneCrudHandler::<SalarySlipService, SalarySlip, CreateSalarySlipDto, UpdateSalarySlipDto, SalarySlipResponseDto>::routes(
+    BackboneCrudHandler::<SalarySlipService, SalarySlip, CreateSalarySlipDto, UpdateSalarySlipDto, SalarySlipResponseDto>::routes_guarded(
         service,
         "/salary_slips",
+        salary_slip_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for SalarySlip.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_salary_slip_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_salary_slip_read_routes(service: Arc<SalarySlipService>) -> Router {
-    BackboneCrudHandler::<SalarySlipService, SalarySlip, CreateSalarySlipDto, UpdateSalarySlipDto, SalarySlipResponseDto>::read_routes(
+    BackboneCrudHandler::<SalarySlipService, SalarySlip, CreateSalarySlipDto, UpdateSalarySlipDto, SalarySlipResponseDto>::read_routes_guarded(
         service,
         "/salary_slips",
+        salary_slip_permissions(),
     )
 }
 
@@ -140,9 +149,10 @@ pub fn create_salary_slip_read_routes(service: Arc<SalarySlipService>) -> Router
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_salary_slip_write_routes(service: Arc<SalarySlipService>) -> Router {
-    BackboneCrudHandler::<SalarySlipService, SalarySlip, CreateSalarySlipDto, UpdateSalarySlipDto, SalarySlipResponseDto>::write_routes(
+    BackboneCrudHandler::<SalarySlipService, SalarySlip, CreateSalarySlipDto, UpdateSalarySlipDto, SalarySlipResponseDto>::write_routes_guarded(
         service,
         "/salary_slips",
+        salary_slip_permissions(),
     )
 }
 
@@ -211,53 +221,21 @@ pub async fn salary_slip_history(
     use serde_json::json;
     use sqlx::Row;
     let subject_id = id.to_string();
-    let mut conn = match pool.acquire().await {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                axum::Json(json!({
-                    "error": "history_pool_unavailable",
-                    "message": e.to_string(),
-                })),
-            )
-                .into_response()
-        }
-    };
-    // Trail reads fence like business reads (ADR-0029 decorator): relay the
-    // ambient org scope onto this self-opened connection.
-    if let Some(scope) = backbone_orm::org_scope::current_org_scope() {
-        if let Err(e) = backbone_orm::org_scope::bind_org_scope_on(&mut conn, &scope).await {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                axum::Json(json!({
-                    "error": "history_scope_bind",
-                    "message": e.to_string(),
-                })),
-            )
-                .into_response()
-        }
-    }
+    // Trail reads fence like business reads (ADR-0029 decorator): they ride the
+    // request's own connection, which already carries the fence variables. A
+    // connection opened here would not: the scope binds only inside a
+    // transaction, so the fenced trail would answer an empty history.
     const SUBJECT_TYPE: &str = "payroll.salary_slips";
     match q.as_of {
         None => {
-            let rows = match sqlx::query("SELECT action, actor, changed, reason, occurred_at, txid, ROW_NUMBER() OVER (ORDER BY occurred_at, txid) AS position, COUNT(*) OVER () AS total FROM auditlog.audit_trails WHERE subject_type = $1 AND subject_id = $2 ORDER BY occurred_at DESC, txid DESC")
-                .bind(SUBJECT_TYPE)
-                .bind(&subject_id)
-                .fetch_all(&mut *conn)
-                .await
+            let rows = match backbone_orm::org_scope::fetch_all_rows_scoped(
+                &pool,
+                sqlx::query("SELECT action, actor, changed, reason, occurred_at, txid, ROW_NUMBER() OVER (ORDER BY occurred_at, txid) AS position, COUNT(*) OVER () AS total FROM auditlog.audit_trails WHERE subject_type = $1 AND subject_id = $2 ORDER BY occurred_at DESC, txid DESC").bind(SUBJECT_TYPE).bind(&subject_id),
+            )
+            .await
             {
                 Ok(r) => r,
-                Err(e) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        axum::Json(json!({
-                            "error": "history_read",
-                            "message": e.to_string(),
-                        })),
-                    )
-                        .into_response()
-                }
+                Err(e) => return salary_slip_history_failure(e),
             };
             let total: i64 = rows.first().map(|r| r.get("total")).unwrap_or(0);
             let entries: Vec<serde_json::Value> = rows
@@ -286,24 +264,14 @@ pub async fn salary_slip_history(
                 .into_response()
         }
         Some(as_of) => {
-            let rows = match sqlx::query("SELECT action, changed, occurred_at FROM auditlog.audit_trails WHERE subject_type = $1 AND subject_id = $2 AND occurred_at <= $3 ORDER BY occurred_at ASC, txid ASC")
-                .bind(SUBJECT_TYPE)
-                .bind(&subject_id)
-                .bind(as_of)
-                .fetch_all(&mut *conn)
-                .await
+            let rows = match backbone_orm::org_scope::fetch_all_rows_scoped(
+                &pool,
+                sqlx::query("SELECT action, changed, occurred_at FROM auditlog.audit_trails WHERE subject_type = $1 AND subject_id = $2 AND occurred_at <= $3 ORDER BY occurred_at ASC, txid ASC").bind(SUBJECT_TYPE).bind(&subject_id).bind(as_of),
+            )
+            .await
             {
                 Ok(r) => r,
-                Err(e) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        axum::Json(json!({
-                            "error": "history_read",
-                            "message": e.to_string(),
-                        })),
-                    )
-                        .into_response()
-                }
+                Err(e) => return salary_slip_history_failure(e),
             };
             if rows.is_empty() {
                 return (
@@ -356,11 +324,31 @@ pub async fn salary_slip_history(
     }
 }
 
+/// The answer to a trail read that failed: a pool that cannot hand out a
+/// connection is the service being unavailable, anything else a failed read.
+/// The database's own sentence is logged, never sent.
+fn salary_slip_history_failure(e: sqlx::Error) -> axum::response::Response {
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    tracing::error!(target: "backbone::history", error = %e, "history read failed");
+    let (status, error) = match e {
+        sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed => (StatusCode::SERVICE_UNAVAILABLE, "history_pool_unavailable"),
+        _ => (StatusCode::INTERNAL_SERVER_ERROR, "history_read"),
+    };
+    (status, axum::Json(serde_json::json!({ "error": error }))).into_response()
+}
+
 /// The nested history route, merged next to the model's CRUD router by the
 /// module's route composer (the pool there is the tenant-resolved one).
 pub fn create_salary_slip_history_route(pool: sqlx::PgPool) -> axum::Router {
     axum::Router::new()
-        .route("/salary_slips/:id/history", axum::routing::get(salary_slip_history))
+        .route(
+            "/salary_slips/:id/history",
+            backbone_core::permission::guarded_needs(
+                axum::routing::get(salary_slip_history),
+                salary_slip_permissions().needs(backbone_core::permission::Gate::Read),
+            ),
+        )
         .with_state(pool)
 }
 

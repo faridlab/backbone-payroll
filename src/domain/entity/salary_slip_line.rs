@@ -205,6 +205,12 @@ impl super::Entity for SalarySlipLine {
 }
 
 impl backbone_core::PersistentEntity for SalarySlipLine {
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("salary_slip_id", "payroll.salary_slips", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

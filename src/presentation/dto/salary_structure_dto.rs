@@ -31,7 +31,12 @@ use crate::domain::entity::SalaryStructureStatus;
 pub struct CreateSalaryStructureDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
+    #[serde(default = "default_create_salary_structure_status")]
     pub status: SalaryStructureStatus,
+}
+
+fn default_create_salary_structure_status() -> SalaryStructureStatus {
+    SalaryStructureStatus::Active
 }
 
 // =============================================================================
@@ -218,12 +223,4 @@ impl backbone_core::ApplyUpdateDto<UpdateSalaryStructureDto> for SalaryStructure
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to SalaryStructure here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

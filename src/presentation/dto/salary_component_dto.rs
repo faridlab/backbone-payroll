@@ -35,15 +35,20 @@ pub struct CreateSalaryComponentDto {
     pub structure_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
-    #[serde(alias = "component_type")]
+    #[serde(default = "default_create_salary_component_component_type", alias = "component_type")]
     pub component_type: ComponentType,
+    #[serde(default)]
     pub amount: Decimal,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "gl_account_id")]
     pub gl_account_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_statutory")]
+    #[serde(default, alias = "is_statutory")]
     pub is_statutory: bool,
+}
+
+fn default_create_salary_component_component_type() -> ComponentType {
+    ComponentType::Earning
 }
 
 // =============================================================================
@@ -277,12 +282,4 @@ impl backbone_core::ApplyUpdateDto<UpdateSalaryComponentDto> for SalaryComponent
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to SalaryComponent here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

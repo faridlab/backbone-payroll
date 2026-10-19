@@ -1,0 +1,48 @@
+-- Down: drop the declared rule constraints for payroll module
+ALTER TABLE IF EXISTS payroll.salary_component_versions DROP CONSTRAINT IF EXISTS ck_salary_component_versions_reason_max_length__max_length;
+ALTER TABLE IF EXISTS payroll.salary_component_versions DROP CONSTRAINT IF EXISTS ck_salary_component_versions_gl_account_id_required__required;
+ALTER TABLE IF EXISTS payroll.salary_component_versions DROP CONSTRAINT IF EXISTS ck_salary_component_versions_amount_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_component_versions DROP CONSTRAINT IF EXISTS ck_salary_component_versions_name_max_length__max_length;
+ALTER TABLE IF EXISTS payroll.salary_component_versions DROP CONSTRAINT IF EXISTS ck_salary_component_versions_name_required__required;
+ALTER TABLE IF EXISTS payroll.salary_component_versions DROP CONSTRAINT IF EXISTS ck_salary_component_versions_component_id_required__required;
+DO $$
+BEGIN
+    IF to_regclass('payroll.uq_salary_component_versions_effective_from__unique') IS NOT NULL AND to_regclass('payroll.idx_salary_component_versions_component_id_effective_from') IS NULL THEN
+        ALTER INDEX payroll.uq_salary_component_versions_effective_from__unique RENAME TO idx_salary_component_versions_component_id_effective_from;
+    END IF;
+END $$;
+
+ALTER TABLE IF EXISTS payroll.salary_components DROP CONSTRAINT IF EXISTS ck_salary_components_gl_account_id_required__required;
+ALTER TABLE IF EXISTS payroll.salary_components DROP CONSTRAINT IF EXISTS ck_salary_components_amount_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_components DROP CONSTRAINT IF EXISTS ck_salary_components_name_max_length__max_length;
+ALTER TABLE IF EXISTS payroll.salary_components DROP CONSTRAINT IF EXISTS ck_salary_components_name_required__required;
+ALTER TABLE IF EXISTS payroll.salary_components DROP CONSTRAINT IF EXISTS ck_salary_components_structure_id_required__required;
+ALTER TABLE IF EXISTS payroll.salary_structures DROP CONSTRAINT IF EXISTS ck_salary_structures_name_max_length__max_length;
+ALTER TABLE IF EXISTS payroll.salary_structures DROP CONSTRAINT IF EXISTS ck_salary_structures_name_required__required;
+ALTER TABLE IF EXISTS payroll.salary_slip_lines DROP CONSTRAINT IF EXISTS ck_salary_slip_lines_source_kind_max_length__max_length;
+ALTER TABLE IF EXISTS payroll.salary_slip_lines DROP CONSTRAINT IF EXISTS ck_salary_slip_lines_gl_account_id_required__required;
+ALTER TABLE IF EXISTS payroll.salary_slip_lines DROP CONSTRAINT IF EXISTS ck_salary_slip_lines_amount_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_slip_lines DROP CONSTRAINT IF EXISTS ck_salary_slip_lines_name_max_length__max_length;
+ALTER TABLE IF EXISTS payroll.salary_slip_lines DROP CONSTRAINT IF EXISTS ck_salary_slip_lines_name_required__required;
+ALTER TABLE IF EXISTS payroll.salary_slip_lines DROP CONSTRAINT IF EXISTS ck_salary_slip_lines_salary_slip_id_required__required;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_tax_method_max_length__max_length;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_overtime_hours_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_net_pay_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_total_deductions_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_gross_pay_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_unpaid_days_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_working_days_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_employee_id_required__required;
+ALTER TABLE IF EXISTS payroll.salary_slips DROP CONSTRAINT IF EXISTS ck_salary_slips_payroll_entry_id_required__required;
+DO $$
+BEGIN
+    IF to_regclass('payroll.uq_salary_slips_employee_id__unique') IS NOT NULL AND to_regclass('payroll.idx_salary_slips_payroll_entry_id_employee_id') IS NULL THEN
+        ALTER INDEX payroll.uq_salary_slips_employee_id__unique RENAME TO idx_salary_slips_payroll_entry_id_employee_id;
+    END IF;
+END $$;
+
+ALTER TABLE IF EXISTS payroll.payroll_entries DROP CONSTRAINT IF EXISTS ck_payroll_entries_total_net_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.payroll_entries DROP CONSTRAINT IF EXISTS ck_payroll_entries_total_deductions_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.payroll_entries DROP CONSTRAINT IF EXISTS ck_payroll_entries_total_gross_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.compensation_changes DROP CONSTRAINT IF EXISTS ck_compensation_changes_new_amount_non_negative__non_negative;
+ALTER TABLE IF EXISTS payroll.compensation_changes DROP CONSTRAINT IF EXISTS ck_compensation_changes_employee_id_required__required;

@@ -82,6 +82,13 @@ impl axum::response::IntoResponse for PayrollEntryError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `payroll_entry:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn payroll_entry_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("payroll_entry")
+        .in_module("payroll")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for PayrollEntry.
 ///
 /// # Routes
@@ -111,21 +118,23 @@ impl axum::response::IntoResponse for PayrollEntryError {
 /// let router = create_payroll_entry_routes(service);
 /// ```
 pub fn create_payroll_entry_routes(service: Arc<PayrollEntryService>) -> Router {
-    BackboneCrudHandler::<PayrollEntryService, PayrollEntry, CreatePayrollEntryDto, UpdatePayrollEntryDto, PayrollEntryResponseDto>::routes(
+    BackboneCrudHandler::<PayrollEntryService, PayrollEntry, CreatePayrollEntryDto, UpdatePayrollEntryDto, PayrollEntryResponseDto>::routes_guarded(
         service,
         "/payroll_entries",
+        payroll_entry_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for PayrollEntry.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_payroll_entry_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_payroll_entry_read_routes(service: Arc<PayrollEntryService>) -> Router {
-    BackboneCrudHandler::<PayrollEntryService, PayrollEntry, CreatePayrollEntryDto, UpdatePayrollEntryDto, PayrollEntryResponseDto>::read_routes(
+    BackboneCrudHandler::<PayrollEntryService, PayrollEntry, CreatePayrollEntryDto, UpdatePayrollEntryDto, PayrollEntryResponseDto>::read_routes_guarded(
         service,
         "/payroll_entries",
+        payroll_entry_permissions(),
     )
 }
 
@@ -141,9 +150,10 @@ pub fn create_payroll_entry_read_routes(service: Arc<PayrollEntryService>) -> Ro
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_payroll_entry_write_routes(service: Arc<PayrollEntryService>) -> Router {
-    BackboneCrudHandler::<PayrollEntryService, PayrollEntry, CreatePayrollEntryDto, UpdatePayrollEntryDto, PayrollEntryResponseDto>::write_routes(
+    BackboneCrudHandler::<PayrollEntryService, PayrollEntry, CreatePayrollEntryDto, UpdatePayrollEntryDto, PayrollEntryResponseDto>::write_routes_guarded(
         service,
         "/payroll_entries",
+        payroll_entry_permissions(),
     )
 }
 

@@ -44,21 +44,26 @@ pub struct CreatePayrollEntryDto {
     pub period_start: Option<NaiveDate>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "period_end")]
     pub period_end: Option<NaiveDate>,
+    #[serde(default = "default_create_payroll_entry_status")]
     pub status: PayrollStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "salary_expense_account_id")]
     pub salary_expense_account_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "salary_payable_account_id")]
     pub salary_payable_account_id: Option<Uuid>,
-    #[serde(alias = "total_gross")]
+    #[serde(default, alias = "total_gross")]
     pub total_gross: Decimal,
-    #[serde(alias = "total_deductions")]
+    #[serde(default, alias = "total_deductions")]
     pub total_deductions: Decimal,
-    #[serde(alias = "total_net")]
+    #[serde(default, alias = "total_net")]
     pub total_net: Decimal,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "journal_id")]
     pub journal_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "accounting_post_id")]
     pub accounting_post_id: Option<Uuid>,
+}
+
+fn default_create_payroll_entry_status() -> PayrollStatus {
+    PayrollStatus::Draft
 }
 
 // =============================================================================
@@ -122,30 +127,30 @@ pub struct PatchPayrollEntryDto {
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "period_month")]
     pub period_month: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "posting_date")]
-    pub posting_date: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "timesheet_approval_id")]
-    pub timesheet_approval_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "period_start")]
-    pub period_start: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "period_end")]
-    pub period_end: Option<NaiveDate>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "posting_date")]
+    pub posting_date: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "timesheet_approval_id")]
+    pub timesheet_approval_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "period_start")]
+    pub period_start: Option<Option<NaiveDate>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "period_end")]
+    pub period_end: Option<Option<NaiveDate>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<PayrollStatus>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "salary_expense_account_id")]
-    pub salary_expense_account_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "salary_payable_account_id")]
-    pub salary_payable_account_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "salary_expense_account_id")]
+    pub salary_expense_account_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "salary_payable_account_id")]
+    pub salary_payable_account_id: Option<Option<Uuid>>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "total_gross")]
     pub total_gross: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "total_deductions")]
     pub total_deductions: Option<Decimal>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "total_net")]
     pub total_net: Option<Decimal>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "journal_id")]
-    pub journal_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "accounting_post_id")]
-    pub accounting_post_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "journal_id")]
+    pub journal_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "accounting_post_id")]
+    pub accounting_post_id: Option<Option<Uuid>>,
 }
 
 impl PatchPayrollEntryDto {
@@ -359,12 +364,4 @@ impl backbone_core::ApplyUpdateDto<UpdatePayrollEntryDto> for PayrollEntry {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to PayrollEntry here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

@@ -81,6 +81,13 @@ impl axum::response::IntoResponse for SalaryComponentError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `salary_component:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn salary_component_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("salary_component")
+        .in_module("payroll")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for SalaryComponent.
 ///
 /// # Routes
@@ -110,21 +117,23 @@ impl axum::response::IntoResponse for SalaryComponentError {
 /// let router = create_salary_component_routes(service);
 /// ```
 pub fn create_salary_component_routes(service: Arc<SalaryComponentService>) -> Router {
-    BackboneCrudHandler::<SalaryComponentService, SalaryComponent, CreateSalaryComponentDto, UpdateSalaryComponentDto, SalaryComponentResponseDto>::routes(
+    BackboneCrudHandler::<SalaryComponentService, SalaryComponent, CreateSalaryComponentDto, UpdateSalaryComponentDto, SalaryComponentResponseDto>::routes_guarded(
         service,
         "/salary_components",
+        salary_component_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for SalaryComponent.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_salary_component_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_salary_component_read_routes(service: Arc<SalaryComponentService>) -> Router {
-    BackboneCrudHandler::<SalaryComponentService, SalaryComponent, CreateSalaryComponentDto, UpdateSalaryComponentDto, SalaryComponentResponseDto>::read_routes(
+    BackboneCrudHandler::<SalaryComponentService, SalaryComponent, CreateSalaryComponentDto, UpdateSalaryComponentDto, SalaryComponentResponseDto>::read_routes_guarded(
         service,
         "/salary_components",
+        salary_component_permissions(),
     )
 }
 
@@ -140,9 +149,10 @@ pub fn create_salary_component_read_routes(service: Arc<SalaryComponentService>)
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_salary_component_write_routes(service: Arc<SalaryComponentService>) -> Router {
-    BackboneCrudHandler::<SalaryComponentService, SalaryComponent, CreateSalaryComponentDto, UpdateSalaryComponentDto, SalaryComponentResponseDto>::write_routes(
+    BackboneCrudHandler::<SalaryComponentService, SalaryComponent, CreateSalaryComponentDto, UpdateSalaryComponentDto, SalaryComponentResponseDto>::write_routes_guarded(
         service,
         "/salary_components",
+        salary_component_permissions(),
     )
 }
 
